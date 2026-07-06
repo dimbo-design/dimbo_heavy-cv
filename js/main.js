@@ -130,7 +130,10 @@ const app = {
   hold: { p: 0, target: null, until: 0 },
   scroll: { y: 0, target: 0, vel: 0, max: 0 },
   strips: [],
-  drag: null,               // null | {kind:'strip', strip} | {kind:'scroll'} | {kind:'stir'}
+  drag: null,               // null | {kind:'strip'|'scroll'|'stir'|'lightbox', ...}
+  lb: null,                 // lightbox: {items:[{src,cap}], idx, acc}
+  lastActivity: 0,
+  lastPulse: 0,
 };
 
 window.__app = app;   // debug / integration-test hook
@@ -176,7 +179,7 @@ function boot() {
   // -- presence semantics
   signals.onPresence = (on) => on ? enterPresent() : leavePresent();
   signals.onLeanIn = () => { if (app.focusedId && !app.spaceId) openSpace(app.focusedId); };
-  signals.onLeanBack = () => closeSpace();
+  signals.onLeanBack = () => { if (app.lb) closeLightbox(); else closeSpace(); };
 
   // -- hand pipeline
   hands.addEventListener('ready', () => { app.handsReady = true; });
@@ -188,10 +191,14 @@ function boot() {
     app.hold.p = 0;
     app.drag = null;
   });
-  gestures.addEventListener('pinchstart', (e) => onPinchStart(e.detail));
-  gestures.addEventListener('pinchmove', (e) => onPinchMove(e.detail));
-  gestures.addEventListener('pinchend', (e) => onPinchEnd(e.detail));
-  gestures.addEventListener('swipe', () => { if (app.spaceId) closeSpace(); });
+  gestures.addEventListener('grabstart', (e) => onGrabStart(e.detail));
+  gestures.addEventListener('grabmove', (e) => onGrabMove(e.detail));
+  gestures.addEventListener('grabend', (e) => onGrabEnd(e.detail));
+  gestures.addEventListener('tap', (e) => onAirTap(e.detail));
+  gestures.addEventListener('poke', (e) => onAirTap(e.detail));
+  gestures.addEventListener('swipe', (e) => onSwipe(e.detail));
+  for (const ev of ['enter', 'grabstart', 'tap', 'poke', 'swipe'])
+    gestures.addEventListener(ev, () => { app.lastActivity = performance.now(); });
 
   engine.initWorker();
 
@@ -201,10 +208,21 @@ function boot() {
 
   window.addEventListener('resize', () => field.resize());
   window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeSpace();
+    if (e.key === 'Escape') { if (app.lb) closeLightbox(); else closeSpace(); }
+    if (app.lb && e.key === 'ArrowRight') lightboxStep(1);
+    if (app.lb && e.key === 'ArrowLeft') lightboxStep(-1);
     if (e.key === 'd' && e.altKey) $('debug').classList.toggle('hidden');
   });
   document.addEventListener('click', (e) => {
+    if (app.lb) {
+      const r = $('lb-img').getBoundingClientRect();
+      if (e.clientX < r.left || e.clientX > r.right ||
+          e.clientY < r.top || e.clientY > r.bottom) closeLightbox();
+      else lightboxStep(e.clientX > r.left + r.width / 2 ? 1 : -1);
+      return;
+    }
+    const fig = e.target.closest('#space-inner figure');
+    if (fig) { openLightbox(fig); return; }
     if (app.spaceId && !e.target.closest('#space-inner') &&
         !e.target.closest('.node') && !e.target.closest('#lang')) {
       closeSpace();
@@ -330,7 +348,8 @@ function openSpace(id) {
   collectStrips();
 
   document.body.classList.add('space-open');
-  app.field.setAside(true);
+  document.body.classList.toggle('space-right', (node.pose?.x ?? 1) < 0);
+  app.field.setPose(node.pose || { x: 0.46, rotY: -0.5, scale: 0.9, dim: 0 });
   applyCadence();
 }
 
@@ -342,8 +361,9 @@ function closeSpace() {
   app.hold.until = performance.now() + 900;
   app.strips = [];
   app.drag = null;
+  closeLightbox();
   document.body.classList.remove('space-open');
-  app.field.setAside(false);
+  app.field.setPose(null);
   applyCadence();
 }
 
@@ -371,8 +391,10 @@ function hitStrip(x, y) {
   return null;
 }
 
-function onPinchStart({ x, y }) {
-  if (app.spaceId) {
+function onGrabStart({ x, y }) {
+  if (app.lb) {
+    app.drag = { kind: 'lightbox', acc: 0 };
+  } else if (app.spaceId) {
     const s = hitStrip(x, y);
     app.drag = s ? { kind: 'strip', strip: s } : { kind: 'scroll' };
     if (s) { s.vel = 0; s.el.classList.add('dragging'); }
@@ -381,10 +403,17 @@ function onPinchStart({ x, y }) {
   }
 }
 
-function onPinchMove({ dx, dy }) {
+function onGrabMove({ dx, dy }) {
   const d = app.drag;
   if (!d) return;
-  if (d.kind === 'strip') {
+  if (d.kind === 'lightbox') {
+    d.acc += dx;
+    $('lb-img').style.transform = `translateX(${d.acc * 0.35}px)`;
+    if (Math.abs(d.acc) > 150) {
+      lightboxStep(d.acc < 0 ? 1 : -1);
+      d.acc = 0;
+    }
+  } else if (d.kind === 'strip') {
     moveStrip(d.strip, dx);
   } else if (d.kind === 'scroll') {
     app.scroll.target = clamp(app.scroll.target - dy, 0, app.scroll.max);
@@ -394,16 +423,100 @@ function onPinchMove({ dx, dy }) {
   }
 }
 
-function onPinchEnd({ vx, vy }) {
+function onGrabEnd({ vx, vy }) {
   const d = app.drag;
   if (!d) return;
-  if (d.kind === 'strip') {
+  if (d.kind === 'lightbox') {
+    $('lb-img').style.transform = '';
+  } else if (d.kind === 'strip') {
     d.strip.vel = vx;
     d.strip.el.classList.remove('dragging');
   } else if (d.kind === 'scroll') {
     app.scroll.vel = -vy;
   }
   app.drag = null;
+}
+
+// air-tap / poke: acts like a click at the cursor — people jab at screens
+function onAirTap({ x, y }) {
+  if (app.lb) {
+    const r = $('lb-img').getBoundingClientRect();
+    if (x < r.left || x > r.right || y < r.top || y > r.bottom) closeLightbox();
+    else lightboxStep(x > r.left + r.width / 2 ? 1 : -1);
+    return;
+  }
+  if (app.spaceId) {
+    const el = document.elementFromPoint(x, y);
+    const fig = el?.closest('#space-inner figure');
+    if (fig) { openLightbox(fig); return; }
+    const link = el?.closest('#space-inner a');
+    if (link) { link.click(); return; }
+    return;
+  }
+  if (app.state === 'present' && app.focusedId) openSpace(app.focusedId);
+}
+
+function onSwipe({ axis, dir }) {
+  if (app.lb) {
+    if (axis === 'x') lightboxStep(dir === 'left' ? 1 : -1);
+    else closeLightbox();
+    return;
+  }
+  if (!app.spaceId) return;
+  if (axis === 'x') {
+    closeSpace();
+  } else {
+    const step = window.innerHeight * 0.55 * (dir === 'up' ? 1 : -1);
+    app.scroll.target = clamp(app.scroll.target + step, 0, app.scroll.max);
+  }
+}
+
+// ---------------------------------------------------------------- lightbox
+
+function currentStripItems() {
+  return [...document.querySelectorAll('#space-inner .strip figure')];
+}
+
+function openLightbox(fig) {
+  const figures = currentStripItems();
+  const idx = figures.indexOf(fig);
+  if (idx < 0) return;
+  app.lb = {
+    items: figures.map((f) => ({
+      src: f.querySelector('img').src,
+      cap: f.querySelector('figcaption')?.textContent || '',
+    })),
+    idx,
+  };
+  renderLightbox();
+  document.body.classList.add('lb-open');
+}
+
+// step past the last photo → the chapter takes you back (reversible exit)
+function lightboxStep(delta) {
+  if (!app.lb) return;
+  const next = app.lb.idx + delta;
+  if (next >= app.lb.items.length) { closeLightbox(); return; }
+  if (next < 0) { closeLightbox(); return; }
+  app.lb.idx = next;
+  renderLightbox();
+}
+
+function renderLightbox() {
+  const { items, idx } = app.lb;
+  const img = $('lb-img');
+  img.classList.remove('lb-anim');
+  void img.offsetWidth;                      // restart the entry animation
+  img.src = items[idx].src;
+  img.classList.add('lb-anim');
+  $('lb-cap').textContent = items[idx].cap;
+  $('lb-count').textContent = `${idx + 1} / ${items.length}`;
+}
+
+function closeLightbox() {
+  if (!app.lb) return;
+  app.lb = null;
+  document.body.classList.remove('lb-open');
 }
 
 function moveStrip(s, dx) {
@@ -437,6 +550,12 @@ function onMouseDown(e) {
 }
 
 function onWheel(e) {
+  if (app.lb) {
+    e.preventDefault();
+    const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+    if (Math.abs(d) > 24) lightboxStep(d > 0 ? 1 : -1);
+    return;
+  }
   if (!app.spaceId) return;
   e.preventDefault();
   const s = hitStrip(e.clientX, e.clientY);
@@ -484,6 +603,8 @@ function loop(t) {
   updateHold(dt, t);
   updateCursor();
   updateSpacePhysics(dt);
+  updateFieldTouch();
+  updateIdlePulse(t);
 
   if (t - lastTele > 500) { lastTele = t; renderTelemetry(); renderDebug(); }
   requestAnimationFrame(loop);
@@ -552,7 +673,9 @@ function updateCursor() {
   const el = $('cursor');
   if (!g.active || app.state !== 'present') return;
   el.style.transform = `translate3d(${g.cursor.x}px, ${g.cursor.y}px, 0)`;
-  el.className = g.mode === 'pinch' ? 'm-pinch' : g.mode === 'palm' ? 'm-palm' : '';
+  const over = app.focusedId && !app.spaceId ? ' on-target' : '';
+  el.className = (g.mode === 'grab' ? 'm-grab' : g.mode === 'palm' ? 'm-palm'
+    : g.mode === 'point' ? 'm-point' : '') + over;
   const C = 119.4;
   el.querySelector('.c-prog').style.strokeDashoffset = String(C * (1 - app.hold.p));
 }
@@ -583,6 +706,31 @@ function updateSpacePhysics(dt) {
     }
     s.track.style.transform = `translateX(${s.x}px)`;
   }
+}
+
+// the hand physically touches the particle fabric
+function updateFieldTouch() {
+  const g = app.gestures;
+  if (g.active && app.state === 'present') {
+    const strength = 0.35 + 0.75 * g.pinchStrength;
+    app.field.setHandScreen(g.cursor.x, g.cursor.y, strength);
+  } else {
+    app.field.setHandScreen(null, 0, 0);
+  }
+}
+
+// quiet invitation: if nothing happens for a while, one node breathes once
+function updateIdlePulse(now) {
+  if (app.state !== 'present' || app.spaceId || !app.nodesShown) return;
+  if (now - Math.max(app.lastActivity, app.presentSince) < 8000) return;
+  if (now - app.lastPulse < 9000) return;
+  app.lastPulse = now;
+  const id = app.focusedId || NODES[Math.floor(Math.random() * NODES.length)].id;
+  const el = document.querySelector(`.node[data-id="${id}"]`);
+  if (!el) return;
+  el.classList.remove('pulse');
+  void el.offsetWidth;
+  el.classList.add('pulse');
 }
 
 // ---------------------------------------------------------------- chrome

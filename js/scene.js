@@ -13,9 +13,11 @@ const VERT = /* glsl */`
   uniform sampler2D uDepthB;
   uniform float uMix, uTime, uCoherence, uProgress, uAmp, uPx, uDpr;
   uniform vec2 uPlane;
+  uniform vec3 uHand;          // x, y in group space · z = strength
   varying float vD;
   varying float vGate;
   varying float vEdge;
+  varying float vTouch;
 
   void main() {
     vec2 suv = vec2(1.0 - uv.x, 1.0 - uv.y);   // mirror x, image y is top-down
@@ -34,6 +36,12 @@ const VERT = /* glsl */`
 
     vec3 p = mix(drift, formed, uCoherence);
     p.z += sin(uTime * 0.4 + aRand * 6.28318) * 0.07 * (1.0 - uCoherence);
+
+    // the hand touches the fabric: particles rise toward it
+    float hd = distance(p.xy, uHand.xy);
+    float touch = uHand.z * exp(-hd * hd * 0.55);
+    p.z += touch * 1.1;
+    vTouch = touch;
 
     vD = d;
     // accretion gate (loading) × sparsity gate (dormant field shows ~40%)
@@ -54,10 +62,11 @@ const VERT = /* glsl */`
 const FRAG = /* glsl */`
   precision highp float;
   uniform vec3 uBase, uAccent;
-  uniform float uCoherence, uOpacity;
+  uniform float uCoherence, uOpacity, uDim;
   varying float vD;
   varying float vGate;
   varying float vEdge;
+  varying float vTouch;
 
   void main() {
     if (vGate < 0.5) discard;
@@ -73,7 +82,9 @@ const FRAG = /* glsl */`
     float lum = mix(0.30, mix(0.16, 0.85, vD), uCoherence);
     // when a form is present, keep exposure on it — quiet the far background
     float focusDim = mix(1.0, 0.30 + 0.70 * smoothstep(0.06, 0.45, vD), uCoherence);
-    gl_FragColor = vec4(col, soft * uOpacity * lum * focusDim * vEdge);
+    float a = soft * uOpacity * lum * focusDim * vEdge * (1.0 - uDim * 0.6);
+    a += soft * vTouch * 0.5;                    // touched particles glow
+    gl_FragColor = vec4(col, a);
   }
 `;
 
@@ -121,6 +132,8 @@ export class Field {
       uBase:      { value: new THREE.Color(CONFIG.colors.base) },
       uAccent:    { value: new THREE.Color(CONFIG.colors.accent) },
       uOpacity:   { value: 1 },
+      uDim:       { value: 0 },
+      uHand:      { value: new THREE.Vector3(0, 0, 0) },
     };
 
     const { cols, rows } = CONFIG.grid;
@@ -163,9 +176,18 @@ export class Field {
     this.rotTarget = { x: 0, y: 0 };
     this.mixRate = 1 / 120;                        // updated from inference cadence
 
-    // Aside pose: the form politely steps aside when a chapter opens
-    this.aside = false;
-    this._poseX = 0; this._poseRotY = 0; this._poseScale = 1;
+    // Pose: the form steps aside differently for every chapter
+    // {x: fraction of half-width (−1..1), rotY, scale, dim}
+    this.pose = null;
+    this._poseX = 0; this._poseRotY = 0; this._poseScale = 1; this._poseDim = 0;
+
+    // Hand touch target (group-local x, y + strength)
+    this._handTarget = new THREE.Vector3();
+    this._handStrength = 0;
+    this._rayInv = new THREE.Matrix4();
+    this._rayRo = new THREE.Vector3();
+    this._rayRd = new THREE.Vector3();
+    this._rayNdc = new THREE.Vector3();
 
     // Stir: pinch-drag in browse mode swirls the field, springs back
     this._stirRot = 0; this._stirVel = 0;
@@ -232,11 +254,32 @@ export class Field {
     this.rotTarget.x = (cy - 0.5) * -0.12;
   }
 
-  setAside(on) { this.aside = on; }
+  // pose: null (center stage) or {x, rotY, scale, dim}
+  setPose(pose) { this.pose = pose; }
 
   addStir(dx, dy) {
     this._stirVel += dx * 0.0035;
     this._stirXVel += dy * -0.004;
+  }
+
+  // Project the screen-space cursor onto the form's plane (group-local)
+  // so the shader can lift particles under the hand.
+  setHandScreen(px, py, strength) {
+    this._handStrength += (strength - this._handStrength) * 0.25;
+    if (px === null) return;
+    this._rayNdc.set((px / this.w) * 2 - 1, -(py / this.h) * 2 + 1, 0.5);
+    this._rayNdc.unproject(this.camera);
+    this._rayRd.copy(this._rayNdc).sub(this.camera.position).normalize();
+    this._rayInv.copy(this.group.matrixWorld).invert();
+    this._rayRo.copy(this.camera.position).applyMatrix4(this._rayInv);
+    this._rayRd.transformDirection(this._rayInv);
+    if (Math.abs(this._rayRd.z) < 1e-4) return;
+    const t = (2.2 - this._rayRo.z) / this._rayRd.z;   // mid-depth of the form
+    if (t <= 0) return;
+    this._handTarget.set(
+      this._rayRo.x + this._rayRd.x * t,
+      this._rayRo.y + this._rayRd.y * t,
+      0);
   }
 
   frame(dt) {
@@ -249,16 +292,22 @@ export class Field {
     u.uOpacity.value += (this.tOpacity - u.uOpacity.value) * k;
     u.uProgress.value += (this.tProgress - u.uProgress.value) * (1 - Math.exp(-dt * 1.2));
 
-    // aside pose eases the whole group to the right and turns it slightly
+    // pose eases the whole group toward the chapter's arrangement
     const worldRight = Math.tan(THREE.MathUtils.degToRad(CONFIG.camera.fov / 2))
       * this.camera.position.z * this.camera.aspect;
     const kp = 1 - Math.exp(-dt * 2.2);
-    const tx = this.aside ? worldRight * 0.46 : 0;
-    const tr = this.aside ? -0.52 : 0;
-    const ts = this.aside ? 0.9 : 1;
-    this._poseX += (tx - this._poseX) * kp;
-    this._poseRotY += (tr - this._poseRotY) * kp;
-    this._poseScale += (ts - this._poseScale) * kp;
+    const p = this.pose;
+    this._poseX += ((p ? worldRight * p.x : 0) - this._poseX) * kp;
+    this._poseRotY += ((p ? p.rotY : 0) - this._poseRotY) * kp;
+    this._poseScale += ((p ? p.scale : 1) - this._poseScale) * kp;
+    this._poseDim += ((p ? p.dim || 0 : 0) - this._poseDim) * kp;
+    u.uDim.value = this._poseDim;
+
+    // hand touch eases toward its target
+    const hv = u.uHand.value;
+    hv.x += (this._handTarget.x - hv.x) * 0.3;
+    hv.y += (this._handTarget.y - hv.y) * 0.3;
+    hv.z = this._handStrength;
 
     // stir spring
     this._stirVel += (-this._stirRot * 6.0 - this._stirVel * 3.2) * dt;

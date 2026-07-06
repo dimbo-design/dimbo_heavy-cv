@@ -2,7 +2,9 @@
 
 export const CONFIG = {
   // Depth model input, multiples of 14 (ViT patch size).
-  input:    { width: 336, height: 252 },  // webgpu
+  // 280×210 = 300 patches vs 432 at 336×252 — ~30% faster per frame,
+  // indistinguishable through a 176×132 particle grid.
+  input:    { width: 280, height: 210 },  // webgpu
   inputCpu: { width: 224, height: 168 },  // wasm fallback
 
   // Particle field
@@ -62,10 +64,10 @@ export const CONFIG = {
   // Inference cadence per state, ms between frames (heat control).
   // The uMix crossfade in the shader hides the low rate completely.
   cadence: {
-    depthPresent: 70,
-    depthReading: 110,     // a chapter is open, person mostly still
+    depthPresent: 50,      // the mirror must feel alive
+    depthReading: 90,      // a chapter is open, person mostly still
     depthIdle: 160,        // camera on, nobody in frame
-    handsPresent: 45,
+    handsPresent: 33,      // gestures need low latency above all
     handsIdle: 140,
   },
 

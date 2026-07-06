@@ -88,6 +88,7 @@ a:hover { border-bottom-color: var(--ink-dim); }
 #lang i { font-style: normal; margin: 0 4px; opacity: 0.5; }
 
 #telemetry { display: flex; flex-direction: column; gap: 5px; line-height: 1; }
+#telemetry span, .corner { text-shadow: 0 0 8px rgba(10, 10, 13, 0.9); }
 
 /* ── center blocks: invite / denied / failed ────────────────── */
 
@@ -138,6 +139,8 @@ a:hover { border-bottom-color: var(--ink-dim); }
 
 #identity {
   position: fixed; left: 34px; bottom: 36px; z-index: 25;
+  padding: 18px 26px 14px 0;
+  background: radial-gradient(ellipse at 20% 80%, rgba(10, 10, 13, 0.72), transparent 75%);
   opacity: 0; transform: translateY(10px);
   transition: opacity 1.6s var(--ease), transform 1.6s var(--ease);
   pointer-events: none;
@@ -180,7 +183,17 @@ body.named #identity { opacity: 1; transform: none; }
   transition: opacity 0.7s var(--ease), transform 0.7s var(--ease);
   text-shadow: 0 0 10px rgba(10, 10, 13, 0.95);
 }
+.node::before {
+  content: ''; position: absolute; inset: -16px -26px; z-index: -1;
+  background: radial-gradient(ellipse at 30% 50%, rgba(10, 10, 13, 0.8), transparent 72%);
+  filter: blur(4px);
+}
 .node.focus { opacity: 1; }
+.node.pulse .n-label { animation: nodepulse 1.5s var(--ease); }
+@keyframes nodepulse {
+  0%, 100% { letter-spacing: 0.16em; opacity: 1; }
+  40% { letter-spacing: 0.3em; opacity: 0.55; }
+}
 .node.focus .n-label { border-bottom-color: rgba(232, 228, 218, 0.55); letter-spacing: 0.22em; }
 .node.focus .n-sub { opacity: 1; transform: none; }
 
@@ -211,6 +224,20 @@ body.space-open #space { pointer-events: auto; }
   padding: 15vh 0 22vh 7.5vw;
   width: min(46vw, 640px);
   will-change: transform;
+}
+body.space-right #space-scrim {
+  background: linear-gradient(-100deg,
+    rgba(10, 10, 13, 0.94) 0%,
+    rgba(10, 10, 13, 0.82) 34%,
+    rgba(10, 10, 13, 0.35) 58%,
+    transparent 78%);
+}
+body.space-right #space-inner {
+  margin-left: auto;
+  padding: 15vh 7.5vw 22vh 0;
+}
+body.space-right #space-inner .strip {
+  margin-left: calc(min(46vw, 640px) - 82vw - 7.5vw);
 }
 
 .blk {
@@ -286,6 +313,8 @@ body.space-open .blk {
   display: flex; gap: 20px; will-change: transform; width: max-content;
 }
 #space-inner .strip figure { flex: none; }
+#space-inner .strip figure { cursor: pointer; transition: transform 0.5s var(--ease); }
+#space-inner .strip figure:hover { transform: translateY(-4px); }
 #space-inner .strip img {
   height: 38vh; max-height: 420px; width: auto; display: block;
   border-radius: 2px;
@@ -319,10 +348,38 @@ body.hand-on #cursor { opacity: 1; }
   stroke-dasharray: 119.4; stroke-dashoffset: 119.4;
   transform: rotate(-90deg); transform-origin: center;
 }
-#cursor.m-pinch .c-ring { stroke: var(--ink); }
-#cursor.m-pinch svg { transform: scale(0.72); }
+#cursor.m-grab .c-ring { stroke: var(--ink); }
+#cursor.m-grab svg { transform: scale(0.68); }
 #cursor.m-palm svg { transform: scale(1.12); }
+#cursor.m-point svg { transform: scale(0.88); }
+#cursor.on-target .c-dot { r: 4; }
+#cursor.on-target .c-ring { stroke: var(--ink); }
 #cursor svg { transition: transform 0.18s var(--ease); }
+
+/* ── lightbox ───────────────────────────────────────────────── */
+
+#lightbox {
+  position: fixed; inset: 0; z-index: 60;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(6, 6, 8, 0.88);
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.5s var(--ease);
+}
+body.lb-open #lightbox { opacity: 1; pointer-events: auto; }
+#lightbox figure { display: flex; flex-direction: column; gap: 14px; align-items: center; max-width: 86vw; }
+#lightbox img {
+  max-width: 86vw; max-height: 76vh; display: block;
+  box-shadow: 0 30px 120px rgba(0, 0, 0, 0.7);
+  border-radius: 2px;
+}
+#lightbox img.lb-anim { animation: lbin 0.45s var(--ease); }
+@keyframes lbin { from { opacity: 0; transform: scale(0.96); } }
+#lightbox figcaption {
+  display: flex; gap: 26px; align-items: baseline;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em;
+  color: var(--ink-dim); max-width: 70ch; line-height: 1.6;
+}
+#lightbox #lb-count { color: var(--ink-faint); white-space: nowrap; }
 
 /* ── debug ──────────────────────────────────────────────────── */
 

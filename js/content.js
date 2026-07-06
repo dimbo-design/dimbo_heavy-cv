@@ -4,6 +4,7 @@
 export const NODES = [
   {
     id: 'method',
+    pose: { x: -0.46, rotY: 0.52, scale: 0.92, dim: 0.05 },
     anchor: { x: -4.7, y: 2.3, z: 2.2 },
     label: { ru: 'метод', en: 'method' },
     sub:   { ru: 'как я думаю', en: 'how i think' },
@@ -34,6 +35,7 @@ export const NODES = [
   },
   {
     id: 'warehouse',
+    pose: { x: 0.46, rotY: -0.52, scale: 0.9, dim: 0 },
     anchor: { x: 4.8, y: 1.2, z: 3.0 },
     label: { ru: 'склад ke × uzum', en: 'warehouse ke × uzum' },
     sub:   { ru: 'sla 72 → 100', en: 'sla 72 → 100' },
@@ -82,6 +84,7 @@ export const NODES = [
   },
   {
     id: 'games',
+    pose: { x: 0.55, rotY: -0.78, scale: 0.72, dim: 0.4 },
     anchor: { x: -4.0, y: -2.5, z: 1.6 },
     label: { ru: 'настолки', en: 'board games' },
     sub:   { ru: 'из цифры — в тираж', en: 'from pixels to print' },
@@ -120,6 +123,7 @@ export const NODES = [
   },
   {
     id: 'mythhand',
+    pose: { x: 0.44, rotY: -0.62, scale: 0.95, dim: 0.15 },
     anchor: { x: -5.0, y: -0.3, z: 2.6 },
     label: { ru: 'mythhand', en: 'mythhand' },
     sub:   { ru: 'студия · веб', en: 'studio · web' },
@@ -156,6 +160,7 @@ export const NODES = [
   },
   {
     id: 'uzum',
+    pose: { x: 0.5, rotY: -0.36, scale: 0.85, dim: 0.1 },
     anchor: { x: 4.4, y: 2.9, z: 1.4 },
     label: { ru: 'склад uzum', en: 'uzum warehouse' },
     sub:   { ru: 'система склада · пвз', en: 'warehouse system' },
@@ -186,6 +191,7 @@ export const NODES = [
   },
   {
     id: 'path',
+    pose: { x: -0.52, rotY: 0.42, scale: 0.8, dim: 0.2 },
     anchor: { x: 5.0, y: -1.7, z: 2.0 },
     label: { ru: 'путь', en: 'path' },
     sub:   { ru: '10+ лет', en: '10+ years' },
@@ -224,6 +230,7 @@ export const NODES = [
   },
   {
     id: 'contact',
+    pose: { x: -0.3, rotY: 0.24, scale: 1.14, dim: 0.5 },
     anchor: { x: 0.2, y: -3.3, z: 3.4 },
     label: { ru: 'связь', en: 'contact' },
     sub:   { ru: 'открыт к работе', en: 'open to work' },
