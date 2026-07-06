@@ -18,8 +18,11 @@ export class DepthEngine extends EventTarget {
     this.lastSend = 0;
     this.running = false;
     this.inferMs = 0;         // EMA of inference interval
+    this.intervalMs = CONFIG.pump.minIntervalMs;
     this._pumpTimer = null;
   }
+
+  setCadence(ms) { this.intervalMs = ms; }
 
   initWorker() {
     this.worker = new Worker('js/depth-worker.js', { type: 'module' });
@@ -85,7 +88,7 @@ export class DepthEngine extends EventTarget {
       return;
     }
     const since = performance.now() - this.lastSend;
-    const wait = Math.max(0, CONFIG.pump.minIntervalMs - since);
+    const wait = Math.max(0, this.intervalMs - since);
     clearTimeout(this._pumpTimer);
     this._pumpTimer = setTimeout(() => this._send(), wait);
   }

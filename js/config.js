@@ -6,7 +6,7 @@ export const CONFIG = {
   inputCpu: { width: 224, height: 168 },  // wasm fallback
 
   // Particle field
-  grid:  { cols: 200, rows: 150 },        // 30 000 points
+  grid:  { cols: 176, rows: 132 },        // 23 232 points
   plane: { width: 10.4, height: 7.8 },
   depthAmp: 4.4,                          // z extrusion of the depth form
   pointPx: 4.1,                           // base point size (css px before depth factor)
@@ -59,5 +59,17 @@ export const CONFIG = {
     stagger: 90,
   },
 
-  pump: { minIntervalMs: 30 },
+  // Inference cadence per state, ms between frames (heat control).
+  // The uMix crossfade in the shader hides the low rate completely.
+  cadence: {
+    depthPresent: 70,
+    depthReading: 110,     // a chapter is open, person mostly still
+    depthIdle: 160,        // camera on, nobody in frame
+    handsPresent: 45,
+    handsIdle: 140,
+  },
+
+  hold: { ms: 750, maxSpeed: 280 },       // dwell-to-open charge
+
+  pump: { minIntervalMs: 70 },
 };

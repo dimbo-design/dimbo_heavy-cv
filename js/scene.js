@@ -92,7 +92,8 @@ export class Field {
     this.renderer = new THREE.WebGLRenderer({
       canvas, antialias: false, alpha: false, powerPreference: 'high-performance',
     });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // 1.5 is visually indistinguishable for 3px points and much cooler on retina
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     this.renderer.setClearColor(CONFIG.colors.bg, 1);
 
     this.scene = new THREE.Scene();
@@ -162,6 +163,14 @@ export class Field {
     this.rotTarget = { x: 0, y: 0 };
     this.mixRate = 1 / 120;                        // updated from inference cadence
 
+    // Aside pose: the form politely steps aside when a chapter opens
+    this.aside = false;
+    this._poseX = 0; this._poseRotY = 0; this._poseScale = 1;
+
+    // Stir: pinch-drag in browse mode swirls the field, springs back
+    this._stirRot = 0; this._stirVel = 0;
+    this._stirX = 0; this._stirXVel = 0;
+
     this._wp = new THREE.Vector3();
     this.resize();
   }
@@ -223,6 +232,13 @@ export class Field {
     this.rotTarget.x = (cy - 0.5) * -0.12;
   }
 
+  setAside(on) { this.aside = on; }
+
+  addStir(dx, dy) {
+    this._stirVel += dx * 0.0035;
+    this._stirXVel += dy * -0.004;
+  }
+
   frame(dt) {
     const u = this.uniforms;
     u.uTime.value += dt;
@@ -233,9 +249,32 @@ export class Field {
     u.uOpacity.value += (this.tOpacity - u.uOpacity.value) * k;
     u.uProgress.value += (this.tProgress - u.uProgress.value) * (1 - Math.exp(-dt * 1.2));
 
+    // aside pose eases the whole group to the right and turns it slightly
+    const worldRight = Math.tan(THREE.MathUtils.degToRad(CONFIG.camera.fov / 2))
+      * this.camera.position.z * this.camera.aspect;
+    const kp = 1 - Math.exp(-dt * 2.2);
+    const tx = this.aside ? worldRight * 0.46 : 0;
+    const tr = this.aside ? -0.52 : 0;
+    const ts = this.aside ? 0.9 : 1;
+    this._poseX += (tx - this._poseX) * kp;
+    this._poseRotY += (tr - this._poseRotY) * kp;
+    this._poseScale += (ts - this._poseScale) * kp;
+
+    // stir spring
+    this._stirVel += (-this._stirRot * 6.0 - this._stirVel * 3.2) * dt;
+    this._stirRot += this._stirVel * dt * 60;
+    this._stirXVel += (-this._stirX * 6.0 - this._stirXVel * 3.2) * dt;
+    this._stirX += this._stirXVel * dt * 60;
+    this._stirRot = THREE.MathUtils.clamp(this._stirRot, -0.6, 0.6);
+    this._stirX = THREE.MathUtils.clamp(this._stirX, -0.4, 0.4);
+
     const kr = 1 - Math.exp(-dt * 3.0);
-    this.group.rotation.y += (this.rotTarget.y - this.group.rotation.y) * kr;
-    this.group.rotation.x += (this.rotTarget.x - this.group.rotation.x) * kr;
+    const targetY = this.rotTarget.y + this._poseRotY + this._stirRot;
+    const targetX = this.rotTarget.x + this._stirX;
+    this.group.rotation.y += (targetY - this.group.rotation.y) * kr;
+    this.group.rotation.x += (targetX - this.group.rotation.x) * kr;
+    this.group.position.x = this._poseX;
+    this.group.scale.setScalar(this._poseScale);
 
     // Slow idle sway when nothing is happening
     this.group.rotation.z = Math.sin(u.uTime.value * 0.05) * 0.008;

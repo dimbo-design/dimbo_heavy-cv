@@ -1,12 +1,18 @@
-// Orchestrator: state machine, presence signals, DOM choreography.
+// Orchestrator: state machine, presence signals, gestures, DOM choreography.
 //
-// States: boot → (invite) → watching ⇄ present · panel
+// States: boot → (invite) → watching ⇄ present ⇄ space(chapter)
 //                ↘ denied / failed          mobile is a separate early exit.
+//
+// Opening a chapter: dwell an open hand or a pointing finger on a node,
+// lean toward the screen, or silently click. Closing: swipe the content
+// away, lean back, step out of frame, Esc, or click the empty side.
 
 import { CONFIG } from './config.js';
-import { NODES, UI } from './content.js';
+import { NODES, UI, renderPanel } from './content.js';
 import { Field } from './scene.js';
 import { DepthEngine } from './depth.js';
+import { HandsEngine } from './hands.js';
+import { Gestures } from './gestures.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -30,16 +36,17 @@ class Signals {
     this.proximity = 0;
     this.baseline = 0;
     this.motionPeak = 0;
+    this.panelOpen = false;
+    this.openBaseline = 0;
+    this.lastLeanEnd = 0;
     this._enterAt = null;
     this._exitAt = null;
     this._leanAt = null;
     this._closeAt = null;
-    this.lastLeanEnd = 0;
   }
 
   feed(stats, now) {
     const c = this.cfg;
-    // compactness of the near blob → person-likeness score
     const compact = 1 - clamp((stats.spread - c.spreadLo) / (c.spreadHi - c.spreadLo), 0, 1);
     const rawScore = clamp(stats.frac / 0.10, 0, 1) * compact;
 
@@ -54,7 +61,6 @@ class Signals {
     this.proximity += (clamp((this.frac - c.proxMin) / (c.proxMax - c.proxMin), 0, 1)
       - this.proximity) * 0.25;
 
-    // -- presence hysteresis
     if (!this.present) {
       const eligible = this.score > c.enterScore && this.motionPeak > c.motionGate;
       if (eligible) {
@@ -77,10 +83,8 @@ class Signals {
       } else this._exitAt = null;
     }
 
-    // -- lean in / lean back (panel open/close intent)
     if (this.present) {
       if (!this.panelOpen) {
-        // slow-follow baseline while browsing
         this.baseline += (this.proximity - this.baseline) * 0.02;
         const leaning = this.proximity - this.baseline > c.leanDelta;
         if (leaning && now - this.lastLeanEnd > c.reopenBlockMs) {
@@ -113,15 +117,20 @@ function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
 
 const app = {
   state: 'boot',            // boot | watching | present | denied | failed
-  panelId: null,
+  spaceId: null,
   focusedId: null,
   nodesShown: false,
   cameraOn: false,
   modelReady: false,
+  handsReady: false,
   device: null,
   loadP: 0,
-  fps: 0,
   presentSince: 0,
+  nodePos: new Map(),       // id → {x, y} screen px
+  hold: { p: 0, target: null, until: 0 },
+  scroll: { y: 0, target: 0, vel: 0, max: 0 },
+  strips: [],
+  drag: null,               // null | {kind:'strip', strip} | {kind:'scroll'} | {kind:'stir'}
 };
 
 window.__app = app;   // debug / integration-test hook
@@ -139,12 +148,15 @@ function boot() {
 
   const field = new Field($('scene'));
   const engine = new DepthEngine();
+  const hands = new HandsEngine();
+  const gestures = new Gestures();
   const signals = new Signals(CONFIG.presence);
-  app.field = field; app.engine = engine; app.signals = signals;
+  Object.assign(app, { field, engine, hands, gestures, signals });
 
   for (const n of NODES) field.addAnchor(n.id, n.anchor);
   buildNodes();
 
+  // -- depth pipeline
   engine.addEventListener('progress', (e) => {
     app.loadP = e.detail.p;
     field.setTargets({ progress: 0.12 + 0.88 * e.detail.p });
@@ -161,28 +173,47 @@ function boot() {
     signals.feed(stats, performance.now());
   });
 
+  // -- presence semantics
   signals.onPresence = (on) => on ? enterPresent() : leavePresent();
-  signals.onLeanIn = () => { if (app.focusedId && !app.panelId) openPanel(app.focusedId); };
-  signals.onLeanBack = () => closePanel('lean');
+  signals.onLeanIn = () => { if (app.focusedId && !app.spaceId) openSpace(app.focusedId); };
+  signals.onLeanBack = () => closeSpace();
+
+  // -- hand pipeline
+  hands.addEventListener('ready', () => { app.handsReady = true; });
+  hands.addEventListener('hands', (e) => gestures.ingest(e.detail));
+
+  gestures.addEventListener('enter', () => document.body.classList.add('hand-on'));
+  gestures.addEventListener('leave', () => {
+    document.body.classList.remove('hand-on');
+    app.hold.p = 0;
+    app.drag = null;
+  });
+  gestures.addEventListener('pinchstart', (e) => onPinchStart(e.detail));
+  gestures.addEventListener('pinchmove', (e) => onPinchMove(e.detail));
+  gestures.addEventListener('pinchend', (e) => onPinchEnd(e.detail));
+  gestures.addEventListener('swipe', () => { if (app.spaceId) closeSpace(); });
 
   engine.initWorker();
 
-  // Invite → camera
+  // -- chrome events
   $('invite-action').addEventListener('click', requestCamera);
   $('denied-action').addEventListener('click', requestCamera);
 
   window.addEventListener('resize', () => field.resize());
   window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closePanel('esc');
+    if (e.key === 'Escape') closeSpace();
     if (e.key === 'd' && e.altKey) $('debug').classList.toggle('hidden');
   });
-  // click outside panel closes it (silent affordance, never advertised)
   document.addEventListener('click', (e) => {
-    if (app.panelId && !$('panel').contains(e.target) &&
+    if (app.spaceId && !e.target.closest('#space-inner') &&
         !e.target.closest('.node') && !e.target.closest('#lang')) {
-      closePanel('click');
+      closeSpace();
     }
   });
+
+  // silent mouse/wheel fallbacks — never advertised, always working
+  window.addEventListener('wheel', onWheel, { passive: false });
+  window.addEventListener('mousedown', onMouseDown);
 
   requestAnimationFrame(loop);
 }
@@ -196,6 +227,7 @@ async function requestCamera() {
     app.state = 'watching';
     app.field.setTargets({ coherence: CONFIG.coherence.watching });
     document.body.classList.add('camera-on');
+    app.hands.init(app.engine.video);
   } catch (_) {
     enterDenied();
   }
@@ -220,6 +252,8 @@ function enterPresent() {
   app.state = 'present';
   app.presentSince = performance.now();
   app.field.setTargets({ coherence: CONFIG.coherence.present });
+  app.hands.start();
+  applyCadence();
   setTimeout(() => {
     if (app.state === 'present') document.body.classList.add('named');
   }, CONFIG.reveal.nameMs);
@@ -229,13 +263,24 @@ function leavePresent() {
   app.state = 'watching';
   app.nodesShown = false;
   app.field.setTargets({ coherence: CONFIG.coherence.watching });
-  document.body.classList.remove('named', 'nodes-on');
-  closePanel('away');
+  document.body.classList.remove('named', 'nodes-on', 'hand-on');
+  closeSpace();
+  app.hands.stop();
+  applyCadence();
   for (const el of document.querySelectorAll('.node')) el.classList.remove('shown', 'focus');
   app.focusedId = null;
 }
 
-// ---------------------------------------------------------------- nodes & panel
+function applyCadence() {
+  const present = app.signals?.present;
+  const open = !!app.spaceId;
+  app.engine.setCadence(present
+    ? (open ? CONFIG.cadence.depthReading : CONFIG.cadence.depthPresent)
+    : CONFIG.cadence.depthIdle);
+  app.hands.setCadence(present ? CONFIG.cadence.handsPresent : CONFIG.cadence.handsIdle);
+}
+
+// ---------------------------------------------------------------- nodes
 
 function buildNodes() {
   const wrap = $('nodes');
@@ -245,7 +290,7 @@ function buildNodes() {
     el.className = 'node';
     el.dataset.id = n.id;
     el.innerHTML = `<span class="n-label"></span><span class="n-sub"></span>`;
-    el.addEventListener('click', () => openPanel(n.id));
+    el.addEventListener('click', () => openSpace(n.id));
     wrap.appendChild(el);
   }
   localizeNodes();
@@ -263,65 +308,193 @@ function localizeNodes() {
 function revealNodes() {
   app.nodesShown = true;
   document.body.classList.add('nodes-on');
-  const els = document.querySelectorAll('.node');
-  els.forEach((el, i) => {
+  document.querySelectorAll('.node').forEach((el, i) => {
     setTimeout(() => { if (app.nodesShown) el.classList.add('shown'); }, i * CONFIG.reveal.stagger);
   });
 }
 
-function openPanel(id) {
+// ---------------------------------------------------------------- content space
+
+function openSpace(id) {
   const node = NODES.find((n) => n.id === id);
-  if (!node || app.panelId === id) return;
-  app.panelId = id;
+  if (!node || app.spaceId === id) return;
+  app.spaceId = id;
   app.signals.panelOpen = true;
   app.signals.openBaseline = app.signals.baseline;
-  const c = node.panel[lang];
-  $('panel-inner').innerHTML =
-    `<p class="kicker">${c.kicker}</p><h2>${c.title}</h2>${c.html}`;
-  $('panel').scrollTop = 0;
-  document.body.classList.add('panel-open');
+  app.hold.p = 0;
+  app.hold.until = performance.now() + 1200;
+
+  $('space-inner').innerHTML = renderPanel(node, lang);
+  app.scroll.y = 0; app.scroll.target = 0; app.scroll.vel = 0;
+  $('space-inner').style.transform = 'translateY(0px)';
+  collectStrips();
+
+  document.body.classList.add('space-open');
+  app.field.setAside(true);
+  applyCadence();
 }
 
-function closePanel() {
-  if (!app.panelId) return;
-  app.panelId = null;
+function closeSpace() {
+  if (!app.spaceId) return;
+  app.spaceId = null;
   app.signals.panelOpen = false;
   app.signals.lastLeanEnd = performance.now();
-  document.body.classList.remove('panel-open');
+  app.hold.until = performance.now() + 900;
+  app.strips = [];
+  app.drag = null;
+  document.body.classList.remove('space-open');
+  app.field.setAside(false);
+  applyCadence();
+}
+
+function collectStrips() {
+  app.strips = [...document.querySelectorAll('#space-inner .strip')].map((el) => ({
+    el,
+    track: el.querySelector('.strip-track'),
+    x: 0, vel: 0,
+  }));
+}
+
+function stripBounds(s) {
+  const visible = s.el.clientWidth;
+  const total = s.track.scrollWidth;
+  return { min: Math.min(0, visible - total), max: 0 };
+}
+
+// ---------------------------------------------------------------- gesture drags
+
+function hitStrip(x, y) {
+  for (const s of app.strips) {
+    const r = s.el.getBoundingClientRect();
+    if (y > r.top - 30 && y < r.bottom + 30 && x > r.left - 60) return s;
+  }
+  return null;
+}
+
+function onPinchStart({ x, y }) {
+  if (app.spaceId) {
+    const s = hitStrip(x, y);
+    app.drag = s ? { kind: 'strip', strip: s } : { kind: 'scroll' };
+    if (s) { s.vel = 0; s.el.classList.add('dragging'); }
+  } else if (app.state === 'present') {
+    app.drag = { kind: 'stir' };
+  }
+}
+
+function onPinchMove({ dx, dy }) {
+  const d = app.drag;
+  if (!d) return;
+  if (d.kind === 'strip') {
+    moveStrip(d.strip, dx);
+  } else if (d.kind === 'scroll') {
+    app.scroll.target = clamp(app.scroll.target - dy, 0, app.scroll.max);
+    app.scroll.vel = 0;
+  } else if (d.kind === 'stir') {
+    app.field.addStir(dx, dy);
+  }
+}
+
+function onPinchEnd({ vx, vy }) {
+  const d = app.drag;
+  if (!d) return;
+  if (d.kind === 'strip') {
+    d.strip.vel = vx;
+    d.strip.el.classList.remove('dragging');
+  } else if (d.kind === 'scroll') {
+    app.scroll.vel = -vy;
+  }
+  app.drag = null;
+}
+
+function moveStrip(s, dx) {
+  const { min, max } = stripBounds(s);
+  let x = s.x + dx;
+  if (x > max) x = max + (x - max) * 0.25;        // rubber band
+  if (x < min) x = min + (x - min) * 0.25;
+  s.x = x;
+}
+
+// mouse fallbacks: drag a strip, wheel to scroll — silent, undocumented
+function onMouseDown(e) {
+  if (!app.spaceId) return;
+  const s = hitStrip(e.clientX, e.clientY);
+  if (!s || e.target.closest('a')) return;
+  e.preventDefault();
+  s.el.classList.add('dragging');
+  let lastX = e.clientX, moved = 0;
+  const mm = (ev) => {
+    moveStrip(s, ev.clientX - lastX);
+    moved += Math.abs(ev.clientX - lastX);
+    lastX = ev.clientX;
+  };
+  const mu = () => {
+    s.el.classList.remove('dragging');
+    window.removeEventListener('mousemove', mm);
+    window.removeEventListener('mouseup', mu);
+  };
+  window.addEventListener('mousemove', mm);
+  window.addEventListener('mouseup', mu);
+}
+
+function onWheel(e) {
+  if (!app.spaceId) return;
+  e.preventDefault();
+  const s = hitStrip(e.clientX, e.clientY);
+  if (s && Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+    moveStrip(s, -e.deltaX);
+  } else {
+    app.scroll.target = clamp(app.scroll.target + e.deltaY, 0, app.scroll.max);
+  }
 }
 
 // ---------------------------------------------------------------- render loop
 
 let lastT = performance.now();
 let lastTele = 0;
-let fpsE = 0;
+let fpsE = 60;
+let frameNo = 0;
 
 function loop(t) {
   const dt = Math.min(0.05, (t - lastT) / 1000);
   lastT = t;
-  fpsE = fpsE ? fpsE * 0.95 + (1 / dt) * 0.05 : 60;
+  frameNo++;
+  fpsE = fpsE * 0.95 + (1 / Math.max(dt, 1e-3)) * 0.05;
 
-  const { field, signals } = app;
+  const { field, signals, gestures } = app;
 
-  // gaze follows the visitor; idle when nobody
-  if (app.state === 'present') {
-    const focusX = clamp((signals.cx - 0.5) * 2 * CONFIG.focus.gain, -1.6, 1.6);
-    field.setGaze(focusX * 0.5, signals.cy);
-    if (!app.nodesShown && t - app.presentSince > CONFIG.reveal.nodesMs) revealNodes();
-    if (app.nodesShown) updateNodes(focusX);
-  } else {
-    field.setGaze(Math.sin(t * 0.00013) * 0.25, 0.5);
+  // low-power mode: nobody in front → render at half rate
+  const lowPower = app.state !== 'present';
+  if (!(lowPower && frameNo % 2)) {
+
+    if (app.state === 'present') {
+      const handActive = gestures.active;
+      const focusX = handActive
+        ? clamp((gestures.cursor.x / window.innerWidth - 0.5) * 2, -1.6, 1.6)
+        : clamp((signals.cx - 0.5) * 2 * CONFIG.focus.gain, -1.6, 1.6);
+      field.setGaze(focusX * 0.5, signals.cy);
+      if (!app.nodesShown && t - app.presentSince > CONFIG.reveal.nodesMs) revealNodes();
+      if (app.nodesShown && !app.spaceId) updateNodes(focusX, handActive);
+    } else {
+      field.setGaze(Math.sin(t * 0.00013) * 0.25, 0.5);
+    }
+
+    field.frame(dt * (lowPower ? 2 : 1));
   }
 
-  field.frame(dt);
+  updateHold(dt, t);
+  updateCursor();
+  updateSpacePhysics(dt);
 
   if (t - lastTele > 500) { lastTele = t; renderTelemetry(); renderDebug(); }
   requestAnimationFrame(loop);
 }
 
-function updateNodes(focusX) {
-  // focus cursor in px
-  const cursorPx = window.innerWidth * (0.5 + 0.5 * clamp(focusX, -1, 1) * 0.8);
+function updateNodes(focusX, handActive) {
+  const cursorPx = handActive
+    ? app.gestures.cursor.x
+    : window.innerWidth * (0.5 + 0.5 * clamp(focusX, -1, 1) * 0.8);
+  const cursorPy = handActive ? app.gestures.cursor.y : window.innerHeight * 0.5;
+
   let best = null, bestDist = CONFIG.focus.maxDistPx;
 
   for (const n of NODES) {
@@ -329,20 +502,86 @@ function updateNodes(focusX) {
     const p = app.field.projectAnchor(n.id);
     if (!el || !p) continue;
     if (p.behind) { el.style.opacity = 0; continue; }
-    // parallax: labels drift opposite to focus, deeper labels drift more
     const par = -focusX * 26 * (n.anchor.z / 3.4);
+    const x = p.x + par;
     el.style.transform =
-      `translate(-50%, -50%) translate3d(${p.x + par}px, ${p.y}px, 0) scale(${p.scale})`;
+      `translate(-50%, -50%) translate3d(${x}px, ${p.y}px, 0) scale(${p.scale})`;
     el.style.opacity = '';
-    const d = Math.abs(p.x + par - cursorPx);
+    app.nodePos.set(n.id, { x, y: p.y });
+
+    const d = handActive
+      ? Math.hypot(x - cursorPx, p.y - cursorPy)
+      : Math.abs(x - cursorPx);
     if (d < bestDist) { bestDist = d; best = n.id; }
   }
 
   if (best !== app.focusedId) {
     app.focusedId = best;
+    app.hold.p = 0;
     for (const el of document.querySelectorAll('.node')) {
       el.classList.toggle('focus', el.dataset.id === best);
     }
+  }
+}
+
+// dwell-to-open: hold an open hand (or a pointing finger) on a node
+function updateHold(dt, now) {
+  const g = app.gestures;
+  const chargeable =
+    app.state === 'present' && !app.spaceId && g.active &&
+    (g.mode === 'palm' || g.mode === 'point' || g.mode === 'hand') &&
+    g.speed < CONFIG.hold.maxSpeed &&
+    app.focusedId && now > app.hold.until;
+
+  if (chargeable) {
+    if (app.hold.target !== app.focusedId) { app.hold.target = app.focusedId; app.hold.p = 0; }
+    app.hold.p = Math.min(1, app.hold.p + dt * (1000 / CONFIG.hold.ms) / 1);
+    if (app.hold.p >= 1) {
+      const id = app.hold.target;
+      app.hold.p = 0;
+      openSpace(id);
+    }
+  } else {
+    app.hold.p = Math.max(0, app.hold.p - dt * 2.4);
+    if (!app.focusedId) app.hold.target = null;
+  }
+}
+
+function updateCursor() {
+  const g = app.gestures;
+  const el = $('cursor');
+  if (!g.active || app.state !== 'present') return;
+  el.style.transform = `translate3d(${g.cursor.x}px, ${g.cursor.y}px, 0)`;
+  el.className = g.mode === 'pinch' ? 'm-pinch' : g.mode === 'palm' ? 'm-palm' : '';
+  const C = 119.4;
+  el.querySelector('.c-prog').style.strokeDashoffset = String(C * (1 - app.hold.p));
+}
+
+function updateSpacePhysics(dt) {
+  if (!app.spaceId) return;
+  const inner = $('space-inner');
+
+  app.scroll.max = Math.max(0, inner.scrollHeight - window.innerHeight);
+  if (Math.abs(app.scroll.vel) > 5) {
+    app.scroll.target = clamp(app.scroll.target + app.scroll.vel * dt, 0, app.scroll.max);
+    app.scroll.vel *= Math.exp(-dt * 3.2);
+  }
+  app.scroll.y += (app.scroll.target - app.scroll.y) * (1 - Math.exp(-dt * 9));
+  inner.style.transform = `translateY(${-app.scroll.y}px)`;
+
+  for (const s of app.strips) {
+    const { min, max } = stripBounds(s);
+    const dragging = app.drag?.kind === 'strip' && app.drag.strip === s;
+    if (!dragging) {
+      if (Math.abs(s.vel) > 5) {
+        s.x += s.vel * dt;
+        s.vel *= Math.exp(-dt * 2.6);
+      }
+      // spring back from the rubber zone
+      if (s.x > max) { s.x += (max - s.x) * (1 - Math.exp(-dt * 10)); s.vel = 0; }
+      else if (s.x < min) { s.x += (min - s.x) * (1 - Math.exp(-dt * 10)); s.vel = 0; }
+    }
+    s.track.style.transform = `translateX(${s.x}px)`;
   }
 }
 
@@ -392,37 +631,38 @@ function setLang(l) {
   localStorage.setItem('lang', l);
   renderStatic();
   localizeNodes();
-  if (app.panelId) {
-    const id = app.panelId;
-    app.panelId = null;
-    openPanel(id);
+  if (app.spaceId) {
+    const node = NODES.find((n) => n.id === app.spaceId);
+    $('space-inner').innerHTML = renderPanel(node, lang);
+    collectStrips();
   }
 }
 
 function renderTelemetry() {
   const T = UI.telemetry;
-  const eye = app.cameraOn ? T.eyeOn[lang] : T.eyeOff[lang];
-  let mind;
-  if (app.state === 'failed') mind = '—';
-  else if (!app.modelReady) mind = `${T.mindLoad[lang]} · ${Math.round(app.loadP * 100)}%`;
-  else mind = app.device === 'webgpu' ? T.mindGpu[lang] : T.mindCpu[lang];
-  $('telemetry').innerHTML =
-    `<span>${eye}</span><span>${mind}</span><span>${Math.round(fpsE)} ${T.fps[lang]}</span>`;
+  const rows = [];
+  rows.push(app.cameraOn ? T.eyeOn[lang] : T.eyeOff[lang]);
+  if (app.state === 'failed') rows.push('—');
+  else if (!app.modelReady) rows.push(`${T.mindLoad[lang]} · ${Math.round(app.loadP * 100)}%`);
+  else rows.push(app.device === 'webgpu' ? T.mindGpu[lang] : T.mindCpu[lang]);
+  if (app.gestures?.active) rows.push(T.handsOn[lang]);
+  rows.push(`${Math.round(fpsE)} ${T.fps[lang]}`);
+  $('telemetry').innerHTML = rows.map((r) => `<span>${r}</span>`).join('');
 }
 
 function renderDebug() {
   const el = $('debug');
   if (el.classList.contains('hidden')) return;
-  const s = app.signals;
+  const s = app.signals, g = app.gestures;
   el.textContent = [
-    `state    ${app.state}${app.panelId ? ' · panel:' + app.panelId : ''}`,
-    `score    ${s.score.toFixed(3)}`,
-    `frac     ${s.frac.toFixed(3)}`,
+    `state    ${app.state}${app.spaceId ? ' · space:' + app.spaceId : ''}`,
+    `score    ${s.score.toFixed(3)}  frac ${s.frac.toFixed(3)}`,
     `motion   ${s.motion.toFixed(4)}  peak ${s.motionPeak.toFixed(4)}`,
     `prox     ${s.proximity.toFixed(3)}  base ${s.baseline.toFixed(3)}`,
-    `cx cy    ${s.cx.toFixed(2)} ${s.cy.toFixed(2)}`,
-    `focus    ${app.focusedId || '—'}`,
-    `infer    ${Math.round(app.engine?.inferMs || 0)}ms · ${app.device || '…'}`,
+    `head     ${s.cx.toFixed(2)} ${s.cy.toFixed(2)}`,
+    `hand     ${g.active ? g.mode : '—'}  v ${Math.round(g.speed)}  pinch ${g.pinchStrength.toFixed(2)}`,
+    `focus    ${app.focusedId || '—'}  hold ${app.hold.p.toFixed(2)}`,
+    `infer    ${Math.round(app.engine?.inferMs || 0)}ms · ${app.device || '…'} · ${app.engine?.intervalMs}ms`,
   ].join('\n');
 }
 
