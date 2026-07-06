@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Дмитрий Тогулев — живой интерфейс</title>
+  <meta name="description" content="Продуктовый дизайнер. Интерфейс, который замечает ваше присутствие: живое 3D-зеркало на нейросети прямо в браузере.">
+  <meta property="og:title" content="Дмитрий Тогулев — живой интерфейс">
+  <meta property="og:description" content="Сайт, который видит. Depth Anything V2 + WebGPU, всё локально в браузере.">
+  <meta property="og:image" content="assets/og_img.png">
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter+Tight:wght@300;400;600&display=swap&subset=cyrillic" rel="stylesheet">
+
+  <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+
+  <canvas id="scene"></canvas>
+  <div id="vignette"></div>
+  <div id="grain"></div>
+
+  <header class="corner tl"><span id="mark">тогулев</span></header>
+
+  <nav class="corner tr" id="lang" aria-label="language">
+    <button data-lang="ru">ru</button><i>·</i><button data-lang="en">en</button>
+  </nav>
+
+  <main id="stage">
+
+    <!-- invitation: the conscious act of letting the page see -->
+    <section id="invite" class="center-block">
+      <h1 id="invite-h"></h1>
+      <button id="invite-action" class="iris">
+        <svg viewBox="0 0 120 120" aria-hidden="true">
+          <circle class="iris-outer" cx="60" cy="60" r="52"/>
+          <circle class="iris-inner" cx="60" cy="60" r="20"/>
+        </svg>
+        <span id="invite-action-t"></span>
+      </button>
+      <p class="small" id="invite-s"></p>
+    </section>
+
+    <!-- camera denied -->
+    <section id="denied" class="center-block hidden">
+      <h1 id="denied-h"></h1>
+      <p class="small" id="denied-s"></p>
+      <div class="mini-links" id="denied-links"></div>
+      <button id="denied-action" class="ghost"></button>
+    </section>
+
+    <!-- model failed to load -->
+    <section id="failed" class="center-block hidden">
+      <h1 id="failed-h"></h1>
+      <p class="small" id="failed-s"></p>
+      <div class="mini-links" id="failed-links"></div>
+    </section>
+
+    <!-- identity, revealed on presence -->
+    <div id="identity">
+      <div id="identity-name"></div>
+      <div id="identity-role"></div>
+    </div>
+
+    <!-- content nodes floating around the silhouette -->
+    <div id="nodes" aria-live="polite"></div>
+
+    <!-- reading panel -->
+    <aside id="panel"><div id="panel-inner"></div></aside>
+
+  </main>
+
+  <div class="corner br" id="telemetry"></div>
+  <pre id="debug" class="hidden"></pre>
+
+  <!-- mobile dead-end -->
+  <section id="mobile" class="hidden">
+    <div class="m-inner">
+      <h1 id="mobile-h"></h1>
+      <p id="mobile-s"></p>
+      <div class="m-id">
+        <span id="mobile-name"></span>
+        <span id="mobile-role"></span>
+      </div>
+      <div class="mini-links" id="mobile-links"></div>
+    </div>
+  </section>
+
+  <video id="cam" playsinline muted></video>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"
+    }
+  }
+  </script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
