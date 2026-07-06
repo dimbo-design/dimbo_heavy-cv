@@ -14,8 +14,7 @@ const $ = (id) => document.getElementById(id);
 
 const isMobile =
   /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
-  (navigator.maxTouchPoints > 1 && !matchMedia('(pointer: fine)').matches) ||
-  Math.min(screen.width, screen.height) < 700;
+  (navigator.maxTouchPoints > 1 && !matchMedia('(pointer: fine)').matches);
 
 let lang = localStorage.getItem('lang') ||
   ((navigator.language || 'en').toLowerCase().startsWith('ru') ? 'ru' : 'en');
@@ -124,6 +123,8 @@ const app = {
   fps: 0,
   presentSince: 0,
 };
+
+window.__app = app;   // debug / integration-test hook
 
 if (isMobile) {
   document.body.classList.add('is-mobile');

@@ -9,7 +9,7 @@ export const CONFIG = {
   grid:  { cols: 200, rows: 150 },        // 30 000 points
   plane: { width: 10.4, height: 7.8 },
   depthAmp: 4.4,                          // z extrusion of the depth form
-  pointPx: 30.0,                          // base point size factor
+  pointPx: 4.1,                           // base point size (css px before depth factor)
 
   camera: { fov: 40, z: 13.5 },
 

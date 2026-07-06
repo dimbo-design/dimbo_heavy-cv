@@ -11,10 +11,11 @@ const VERT = /* glsl */`
   attribute float aRand;
   uniform sampler2D uDepthA;
   uniform sampler2D uDepthB;
-  uniform float uMix, uTime, uCoherence, uProgress, uAmp, uPx;
+  uniform float uMix, uTime, uCoherence, uProgress, uAmp, uPx, uDpr;
   uniform vec2 uPlane;
   varying float vD;
   varying float vGate;
+  varying float vEdge;
 
   void main() {
     vec2 suv = vec2(1.0 - uv.x, 1.0 - uv.y);   // mirror x, image y is top-down
@@ -35,11 +36,17 @@ const VERT = /* glsl */`
     p.z += sin(uTime * 0.4 + aRand * 6.28318) * 0.07 * (1.0 - uCoherence);
 
     vD = d;
-    vGate = step(aRand, uProgress);
+    // accretion gate (loading) × sparsity gate (dormant field shows ~40%)
+    float sparse = mix(step(fract(aRand * 7.31), 0.4), 1.0, smoothstep(0.15, 0.7, uCoherence));
+    vGate = step(aRand, uProgress) * sparse;
+
+    // soften the rectangle: fade the lattice out toward its edges
+    vEdge = smoothstep(0.0, 0.07, uv.x) * smoothstep(1.0, 0.93, uv.x)
+          * smoothstep(0.0, 0.09, uv.y) * smoothstep(1.0, 0.91, uv.y);
 
     vec4 mv = modelViewMatrix * vec4(p, 1.0);
-    float size = uPx * (0.5 + 1.1 * d * uCoherence + 0.3 * (1.0 - uCoherence));
-    gl_PointSize = size * (10.0 / -mv.z);
+    float size = uPx * (0.62 + 0.85 * d * uCoherence + 0.2 * (1.0 - uCoherence));
+    gl_PointSize = max(size * uDpr * (13.5 / -mv.z), 1.0);
     gl_Position = projectionMatrix * mv;
   }
 `;
@@ -50,6 +57,7 @@ const FRAG = /* glsl */`
   uniform float uCoherence, uOpacity;
   varying float vD;
   varying float vGate;
+  varying float vEdge;
 
   void main() {
     if (vGate < 0.5) discard;
@@ -62,8 +70,10 @@ const FRAG = /* glsl */`
     float band = smoothstep(0.80, 0.96, vD) * uCoherence;
     col = mix(col, uAccent, band * 0.6);
 
-    float lum = mix(0.42, mix(0.3, 1.0, vD), uCoherence * 0.9);
-    gl_FragColor = vec4(col, soft * uOpacity * lum);
+    float lum = mix(0.30, mix(0.16, 0.85, vD), uCoherence);
+    // when a form is present, keep exposure on it — quiet the far background
+    float focusDim = mix(1.0, 0.30 + 0.70 * smoothstep(0.06, 0.45, vD), uCoherence);
+    gl_FragColor = vec4(col, soft * uOpacity * lum * focusDim * vEdge);
   }
 `;
 
@@ -105,6 +115,7 @@ export class Field {
       uProgress:  { value: 0.12 },
       uAmp:       { value: CONFIG.depthAmp },
       uPx:        { value: CONFIG.pointPx },
+      uDpr:       { value: this.renderer.getPixelRatio() },
       uPlane:     { value: new THREE.Vector2(CONFIG.plane.width, CONFIG.plane.height) },
       uBase:      { value: new THREE.Color(CONFIG.colors.base) },
       uAccent:    { value: new THREE.Color(CONFIG.colors.accent) },
