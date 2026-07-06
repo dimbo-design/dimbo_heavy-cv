@@ -278,6 +278,8 @@ export const UI = {
   invite: {
     h:  { ru: 'Этим интерфейсом управляет присутствие.',
           en: 'This interface is driven by presence.' },
+    hReturn: { ru: 'Интерфейс вас помнит.',
+               en: 'The interface remembers you.' },
     a:  { ru: 'позволить ему видеть', en: 'let it see' },
     s:  { ru: 'камера работает локально — изображение не покидает ваш компьютер',
           en: 'the camera runs locally — nothing ever leaves your machine' },
@@ -309,7 +311,10 @@ export const UI = {
     mindLoad:{ ru: 'разум',          en: 'mind' },
     mindGpu: { ru: 'разум · gpu',    en: 'mind · gpu' },
     mindCpu: { ru: 'разум · cpu',    en: 'mind · cpu' },
+    handsLoad:{ ru: 'руки · грузятся', en: 'hands · loading' },
     handsOn: { ru: 'руки · вижу',    en: 'hands · seen' },
+    handsOff:{ ru: 'руки · не вижу', en: 'hands · unseen' },
+    handsFail:{ ru: 'руки · недоступны', en: 'hands · unavailable' },
     fps:     { ru: 'к/с',            en: 'fps' },
   },
 
@@ -334,7 +339,10 @@ export function renderPanel(node, lang) {
     else if (b.timeline) out += el(`<ul class="timeline">${b.timeline.map(([d, t, w]) =>
       `<li><i>${d}</i><b>${t}</b><span>${w}</span></li>`).join('')}</ul>`);
     else if (b.links) out += el(`<ul class="links">${b.links.map(([href, label]) =>
-      `<li><a href="${href}" ${href.startsWith('#') ? '' : 'target="_blank" rel="noopener"'}>${label}</a></li>`).join('')}</ul>`);
+      // pdf résumé is the one link you can take with a gesture (dwell on it);
+      // external links deliberately stay mouse-only
+      `<li><a href="${href}" ${href.endsWith('.pdf') ? 'download data-dl'
+        : href.startsWith('#') ? '' : 'target="_blank" rel="noopener"'}>${label}</a></li>`).join('')}</ul>`);
     else if (b.strip) out += el(`<div class="strip"><div class="strip-track">${b.strip.map(([src, cap]) =>
       `<figure><img src="${src}" alt="${cap}" loading="lazy" draggable="false"><figcaption>${cap}</figcaption></figure>`).join('')}</div></div>`);
   }

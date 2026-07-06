@@ -25,6 +25,10 @@ const isMobile =
 let lang = localStorage.getItem('lang') ||
   ((navigator.language || 'en').toLowerCase().startsWith('ru') ? 'ru' : 'en');
 
+// the interface remembers a returning visitor
+const returning = !!localStorage.getItem('visited');
+try { localStorage.setItem('visited', '1'); } catch (_) { /* private mode */ }
+
 // ---------------------------------------------------------------- signals
 
 class Signals {
@@ -123,6 +127,10 @@ const app = {
   cameraOn: false,
   modelReady: false,
   handsReady: false,
+  handsFailed: false,
+  glog: [],                 // last recognized gesture events (debug)
+  hoverDl: null,            // a[data-dl] under the hand cursor
+  focusChangedAt: 0,
   device: null,
   loadP: 0,
   presentSince: 0,
@@ -178,12 +186,26 @@ function boot() {
 
   // -- presence semantics
   signals.onPresence = (on) => on ? enterPresent() : leavePresent();
-  signals.onLeanIn = () => { if (app.focusedId && !app.spaceId) openSpace(app.focusedId); };
+  signals.onLeanIn = () => {
+    const now = performance.now();
+    if (!app.focusedId || app.spaceId) return;
+    if (now - app.presentSince < 1800) return;          // just arrived — not intent
+    if (now - app.focusChangedAt < 700) return;         // focus not settled yet
+    openSpace(app.focusedId);
+  };
   signals.onLeanBack = () => { if (app.lb) closeLightbox(); else closeSpace(); };
 
   // -- hand pipeline
   hands.addEventListener('ready', () => { app.handsReady = true; });
+  hands.addEventListener('fatal', () => { app.handsFailed = true; });
   hands.addEventListener('hands', (e) => gestures.ingest(e.detail));
+
+  for (const ev of ['enter', 'leave', 'grabstart', 'grabend', 'tap', 'poke', 'swipe']) {
+    gestures.addEventListener(ev, (e) => {
+      app.glog.push(`${(performance.now() / 1000).toFixed(1)}s ${ev}${e.detail?.dir ? ' ' + e.detail.dir : ''}`);
+      if (app.glog.length > 6) app.glog.shift();
+    });
+  }
 
   gestures.addEventListener('enter', () => document.body.classList.add('hand-on'));
   gestures.addEventListener('leave', () => {
@@ -289,6 +311,19 @@ function leavePresent() {
   app.focusedId = null;
 }
 
+// per-state gesture profiles: deeper in, lighter the flick needed
+const GEST_PROFILES = {
+  browse:   { swipeVx: 1150, swipeVy: 950 },
+  chapter:  { swipeVx: 1000, swipeVy: 850 },
+  lightbox: { swipeVx: 850,  swipeVy: 800 },
+};
+
+function applyGestureProfile() {
+  const p = app.lb ? GEST_PROFILES.lightbox
+    : app.spaceId ? GEST_PROFILES.chapter : GEST_PROFILES.browse;
+  app.gestures.setProfile(p);
+}
+
 function applyCadence() {
   const present = app.signals?.present;
   const open = !!app.spaceId;
@@ -296,6 +331,7 @@ function applyCadence() {
     ? (open ? CONFIG.cadence.depthReading : CONFIG.cadence.depthPresent)
     : CONFIG.cadence.depthIdle);
   app.hands.setCadence(present ? CONFIG.cadence.handsPresent : CONFIG.cadence.handsIdle);
+  applyGestureProfile();
 }
 
 // ---------------------------------------------------------------- nodes
@@ -450,7 +486,15 @@ function onAirTap({ x, y }) {
     const fig = el?.closest('#space-inner figure');
     if (fig) { openLightbox(fig); return; }
     const link = el?.closest('#space-inner a');
-    if (link) { link.click(); return; }
+    if (link) {
+      // taking the mouse returns you to the ordinary web — except the résumé
+      if (link.dataset.dl !== undefined) {
+        link.click();
+        link.classList.add('dl-got');
+        setTimeout(() => link.classList.remove('dl-got'), 1600);
+      }
+      return;
+    }
     return;
   }
   if (app.state === 'present' && app.focusedId) openSpace(app.focusedId);
@@ -485,38 +529,101 @@ function openLightbox(fig) {
     items: figures.map((f) => ({
       src: f.querySelector('img').src,
       cap: f.querySelector('figcaption')?.textContent || '',
+      el: f,
     })),
     idx,
   };
   renderLightbox();
   document.body.classList.add('lb-open');
+  applyGestureProfile();
+  flipFrom(fig);
+}
+
+// FLIP: the photo grows out of its place in the strip, not out of nowhere
+function flipFrom(fig) {
+  const thumb = fig.querySelector('img').getBoundingClientRect();
+  const img = $('lb-img');
+  requestAnimationFrame(() => {
+    const fr = img.getBoundingClientRect();
+    if (!fr.width || !thumb.width) return;
+    const dx = (thumb.left + thumb.width / 2) - (fr.left + fr.width / 2);
+    const dy = (thumb.top + thumb.height / 2) - (fr.top + fr.height / 2);
+    const s = thumb.width / fr.width;
+    img.classList.remove('lb-anim');
+    img.style.transition = 'none';
+    img.style.transform = `translate(${dx}px, ${dy}px) scale(${s})`;
+    void img.offsetWidth;
+    img.style.transition = 'transform 0.65s cubic-bezier(0.22, 1, 0.36, 1)';
+    img.style.transform = '';
+    setTimeout(() => { img.style.transition = ''; }, 700);
+  });
 }
 
 // step past the last photo → the chapter takes you back (reversible exit)
 function lightboxStep(delta) {
   if (!app.lb) return;
   const next = app.lb.idx + delta;
-  if (next >= app.lb.items.length) { closeLightbox(); return; }
-  if (next < 0) { closeLightbox(); return; }
+  if (next >= app.lb.items.length || next < 0) { closeLightbox(); return; }
   app.lb.idx = next;
-  renderLightbox();
+  renderLightbox(delta);
 }
 
-function renderLightbox() {
+function renderLightbox(dir) {
   const { items, idx } = app.lb;
   const img = $('lb-img');
-  img.classList.remove('lb-anim');
-  void img.offsetWidth;                      // restart the entry animation
-  img.src = items[idx].src;
-  img.classList.add('lb-anim');
+  if (dir) {
+    // directional handover: the old frame drifts out, the new one drifts in
+    const ghost = img.cloneNode();
+    ghost.id = '';
+    ghost.className = 'lb-ghost';
+    const fr = img.getBoundingClientRect();
+    const pr = img.parentElement.getBoundingClientRect();
+    ghost.style.left = `${fr.left - pr.left}px`;
+    ghost.style.top = `${fr.top - pr.top}px`;
+    ghost.style.width = `${fr.width}px`;
+    ghost.style.height = `${fr.height}px`;
+    img.parentElement.appendChild(ghost);
+    requestAnimationFrame(() => {
+      ghost.style.transform = `translateX(${dir * -90}px) scale(0.965)`;
+      ghost.style.opacity = '0';
+    });
+    setTimeout(() => ghost.remove(), 600);
+    img.classList.remove('lb-anim', 'lb-from-l', 'lb-from-r');
+    void img.offsetWidth;
+    img.src = items[idx].src;
+    img.classList.add(dir > 0 ? 'lb-from-r' : 'lb-from-l');
+  } else {
+    img.classList.remove('lb-anim', 'lb-from-l', 'lb-from-r');
+    void img.offsetWidth;
+    img.src = items[idx].src;
+    img.classList.add('lb-anim');
+  }
   $('lb-cap').textContent = items[idx].cap;
   $('lb-count').textContent = `${idx + 1} / ${items.length}`;
 }
 
 function closeLightbox() {
   if (!app.lb) return;
+  // reverse FLIP: the photo returns to its slot in the strip
+  const item = app.lb.items[app.lb.idx];
+  const img = $('lb-img');
+  const thumbImg = item?.el?.querySelector('img');
+  if (thumbImg && document.body.contains(thumbImg)) {
+    const thumb = thumbImg.getBoundingClientRect();
+    const fr = img.getBoundingClientRect();
+    if (fr.width && thumb.width) {
+      const dx = (thumb.left + thumb.width / 2) - (fr.left + fr.width / 2);
+      const dy = (thumb.top + thumb.height / 2) - (fr.top + fr.height / 2);
+      const s = thumb.width / fr.width;
+      img.classList.remove('lb-anim', 'lb-from-l', 'lb-from-r');
+      img.style.transition = 'transform 0.5s cubic-bezier(0.22, 1, 0.36, 1)';
+      img.style.transform = `translate(${dx}px, ${dy}px) scale(${s})`;
+      setTimeout(() => { img.style.transition = ''; img.style.transform = ''; }, 520);
+    }
+  }
   app.lb = null;
   document.body.classList.remove('lb-open');
+  applyGestureProfile();
 }
 
 function moveStrip(s, dx) {
@@ -591,7 +698,8 @@ function loop(t) {
         ? clamp((gestures.cursor.x / window.innerWidth - 0.5) * 2, -1.6, 1.6)
         : clamp((signals.cx - 0.5) * 2 * CONFIG.focus.gain, -1.6, 1.6);
       field.setGaze(focusX * 0.5, signals.cy);
-      if (!app.nodesShown && t - app.presentSince > CONFIG.reveal.nodesMs) revealNodes();
+      const nodesDelay = returning ? CONFIG.reveal.nodesMs * 0.45 : CONFIG.reveal.nodesMs;
+    if (!app.nodesShown && t - app.presentSince > nodesDelay) revealNodes();
       if (app.nodesShown && !app.spaceId) updateNodes(focusX, handActive);
     } else {
       field.setGaze(Math.sin(t * 0.00013) * 0.25, 0.5);
@@ -614,7 +722,9 @@ function updateNodes(focusX, handActive) {
   const cursorPx = handActive
     ? app.gestures.cursor.x
     : window.innerWidth * (0.5 + 0.5 * clamp(focusX, -1, 1) * 0.8);
-  const cursorPy = handActive ? app.gestures.cursor.y : window.innerHeight * 0.5;
+  const cursorPy = handActive
+    ? app.gestures.cursor.y
+    : window.innerHeight * clamp(app.signals.cy * 1.5 - 0.2, 0.08, 0.92);
 
   let best = null, bestDist = CONFIG.focus.maxDistPx;
 
@@ -630,14 +740,13 @@ function updateNodes(focusX, handActive) {
     el.style.opacity = '';
     app.nodePos.set(n.id, { x, y: p.y });
 
-    const d = handActive
-      ? Math.hypot(x - cursorPx, p.y - cursorPy)
-      : Math.abs(x - cursorPx);
+    const d = Math.hypot(x - cursorPx, (p.y - cursorPy) * (handActive ? 1 : 0.7));
     if (d < bestDist) { bestDist = d; best = n.id; }
   }
 
   if (best !== app.focusedId) {
     app.focusedId = best;
+    app.focusChangedAt = performance.now();
     app.hold.p = 0;
     for (const el of document.querySelectorAll('.node')) {
       el.classList.toggle('focus', el.dataset.id === best);
@@ -648,32 +757,53 @@ function updateNodes(focusX, handActive) {
 // dwell-to-open: hold an open hand (or a pointing finger) on a node
 function updateHold(dt, now) {
   const g = app.gestures;
-  const chargeable =
-    app.state === 'present' && !app.spaceId && g.active &&
+  const handCalm = g.active &&
     (g.mode === 'palm' || g.mode === 'point' || g.mode === 'hand') &&
-    g.speed < CONFIG.hold.maxSpeed &&
-    app.focusedId && now > app.hold.until;
+    g.speed < CONFIG.hold.maxSpeed && now > app.hold.until;
 
-  if (chargeable) {
-    if (app.hold.target !== app.focusedId) { app.hold.target = app.focusedId; app.hold.p = 0; }
-    app.hold.p = Math.min(1, app.hold.p + dt * (1000 / CONFIG.hold.ms) / 1);
+  // in browse: charge on the focused node → open chapter
+  // in a chapter: charge on the pdf link → the résumé downloads itself
+  const target =
+    app.state !== 'present' ? null
+    : !app.spaceId && app.focusedId ? 'node:' + app.focusedId
+    : app.spaceId && app.hoverDl ? 'dl' : null;
+
+  if (handCalm && target) {
+    if (app.hold.target !== target) { app.hold.target = target; app.hold.p = 0; }
+    app.hold.p = Math.min(1, app.hold.p + dt * (1000 / CONFIG.hold.ms));
     if (app.hold.p >= 1) {
-      const id = app.hold.target;
       app.hold.p = 0;
-      openSpace(id);
+      app.hold.until = now + 1500;
+      if (target === 'dl' && app.hoverDl) {
+        const a = app.hoverDl;
+        a.click();
+        a.classList.add('dl-got');
+        setTimeout(() => a.classList.remove('dl-got'), 1600);
+      } else {
+        openSpace(target.slice(5));
+      }
     }
   } else {
     app.hold.p = Math.max(0, app.hold.p - dt * 2.4);
-    if (!app.focusedId) app.hold.target = null;
+    if (!target) app.hold.target = null;
   }
 }
 
 function updateCursor() {
   const g = app.gestures;
   const el = $('cursor');
-  if (!g.active || app.state !== 'present') return;
+  if (!g.active || app.state !== 'present') { app.hoverDl = null; return; }
   el.style.transform = `translate3d(${g.cursor.x}px, ${g.cursor.y}px, 0)`;
-  const over = app.focusedId && !app.spaceId ? ' on-target' : '';
+
+  // the one gesture-enabled link: the pdf résumé
+  if (app.spaceId && !app.lb) {
+    const under = document.elementFromPoint(g.cursor.x, g.cursor.y);
+    app.hoverDl = under?.closest('#space-inner a[data-dl]') || null;
+  } else {
+    app.hoverDl = null;
+  }
+
+  const over = (app.focusedId && !app.spaceId) || app.hoverDl ? ' on-target' : '';
   el.className = (g.mode === 'grab' ? 'm-grab' : g.mode === 'palm' ? 'm-palm'
     : g.mode === 'point' ? 'm-point' : '') + over;
   const C = 119.4;
@@ -704,7 +834,13 @@ function updateSpacePhysics(dt) {
       if (s.x > max) { s.x += (max - s.x) * (1 - Math.exp(-dt * 10)); s.vel = 0; }
       else if (s.x < min) { s.x += (min - s.x) * (1 - Math.exp(-dt * 10)); s.vel = 0; }
     }
+    // photos lean into the motion — matter, not a carousel
+    const prevX = s._lastX ?? s.x;
+    const instV = (s.x - prevX) / Math.max(dt, 1e-3);
+    s._lastX = s.x;
+    s._tilt = (s._tilt ?? 0) + (clamp(instV / 260, -7, 7) - (s._tilt ?? 0)) * (1 - Math.exp(-dt * 8));
     s.track.style.transform = `translateX(${s.x}px)`;
+    s.track.style.setProperty('--tilt', s._tilt.toFixed(2));
   }
 }
 
@@ -743,7 +879,7 @@ function renderStatic() {
   setText('identity-name', UI.name[lang]);
   setText('identity-role', UI.role[lang]);
 
-  setText('invite-h', UI.invite.h[lang]);
+  setText('invite-h', returning ? UI.invite.hReturn[lang] : UI.invite.h[lang]);
   setText('invite-action-t', UI.invite.a[lang]);
   setText('invite-s', UI.invite.s[lang]);
 
@@ -793,7 +929,12 @@ function renderTelemetry() {
   if (app.state === 'failed') rows.push('—');
   else if (!app.modelReady) rows.push(`${T.mindLoad[lang]} · ${Math.round(app.loadP * 100)}%`);
   else rows.push(app.device === 'webgpu' ? T.mindGpu[lang] : T.mindCpu[lang]);
-  if (app.gestures?.active) rows.push(T.handsOn[lang]);
+  if (app.cameraOn) {
+    if (app.handsFailed) rows.push(T.handsFail[lang]);
+    else if (!app.handsReady) rows.push(T.handsLoad[lang]);
+    else if (app.gestures?.active) rows.push(T.handsOn[lang]);
+    else if (app.signals?.present) rows.push(T.handsOff[lang]);
+  }
   rows.push(`${Math.round(fpsE)} ${T.fps[lang]}`);
   $('telemetry').innerHTML = rows.map((r) => `<span>${r}</span>`).join('');
 }
@@ -811,6 +952,8 @@ function renderDebug() {
     `hand     ${g.active ? g.mode : '—'}  v ${Math.round(g.speed)}  pinch ${g.pinchStrength.toFixed(2)}`,
     `focus    ${app.focusedId || '—'}  hold ${app.hold.p.toFixed(2)}`,
     `infer    ${Math.round(app.engine?.inferMs || 0)}ms · ${app.device || '…'} · ${app.engine?.intervalMs}ms`,
+    `hands    ${app.handsFailed ? 'FAILED' : app.handsReady ? 'ready' : 'loading'}`,
+    `events   ${app.glog.slice(-5).join('  ·  ') || '—'}`,
   ].join('\n');
 }
 

@@ -287,8 +287,13 @@ export class Field {
     u.uTime.value += dt;
     u.uMix.value = Math.min(1, u.uMix.value + dt * 1000 * this.mixRate);
 
+    // coherence: assembles quickly (recognition), dissolves slowly —
+    // when the visitor leaves, their imprint lingers before drifting apart
+    const rising = this.tCoherence > u.uCoherence.value;
+    const kc = 1 - Math.exp(-dt * (rising ? 2.4 : 0.5));
+    u.uCoherence.value += (this.tCoherence - u.uCoherence.value) * kc;
     const k = 1 - Math.exp(-dt * 2.4);             // smooth approach
-    u.uCoherence.value += (this.tCoherence - u.uCoherence.value) * k;
+
     u.uOpacity.value += (this.tOpacity - u.uOpacity.value) * k;
     u.uProgress.value += (this.tProgress - u.uProgress.value) * (1 - Math.exp(-dt * 1.2));
 

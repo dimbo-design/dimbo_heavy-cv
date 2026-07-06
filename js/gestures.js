@@ -37,7 +37,11 @@ export class Gestures extends EventTarget {
     this._samples = [];
     this._swipeCooldownUntil = 0;
     this._hasCursor = false;
+    this._prof = { swipeVx: 1150, swipeVy: 950 };
   }
+
+  // per-state thresholds: deeper into content, the lighter the flick
+  setProfile(p) { this._prof = { ...this._prof, ...p }; }
 
   ingest({ hands }) {
     const now = performance.now();
@@ -146,9 +150,9 @@ export class Gestures extends EventTarget {
       const dy = this.cursor.y - s0.y;
       const v = this._velocity();
       const H = Math.abs(dx) > window.innerWidth * 0.15 &&
-                Math.abs(dx) > Math.abs(dy) * 1.5 && Math.abs(v.vx) > 1150;
+                Math.abs(dx) > Math.abs(dy) * 1.5 && Math.abs(v.vx) > this._prof.swipeVx;
       const V = Math.abs(dy) > window.innerHeight * 0.16 &&
-                Math.abs(dy) > Math.abs(dx) * 1.5 && Math.abs(v.vy) > 950;
+                Math.abs(dy) > Math.abs(dx) * 1.5 && Math.abs(v.vy) > this._prof.swipeVy;
       if (H || V) {
         this._swipeCooldownUntil = now + 850;
         this._samples.length = 0;

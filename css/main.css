@@ -301,6 +301,14 @@ body.space-open .blk {
 
 #space-inner .links { list-style: none; display: flex; flex-direction: column; gap: 15px; margin: 8px 0 20px; }
 #space-inner .links a { font-size: 17px; font-weight: 400; border-bottom-color: var(--line); padding-bottom: 3px; }
+#space-inner a.dl-got {
+  animation: dlgot 1.4s var(--ease);
+}
+@keyframes dlgot {
+  0% { border-bottom-color: var(--ink); letter-spacing: 0.04em; opacity: 1; }
+  30% { letter-spacing: 0.08em; opacity: 0.6; }
+  100% { border-bottom-color: var(--line); letter-spacing: 0; opacity: 1; }
+}
 
 /* photo strips — draggable matter, escaping the text column */
 #space-inner .strip {
@@ -313,8 +321,13 @@ body.space-open .blk {
   display: flex; gap: 20px; will-change: transform; width: max-content;
 }
 #space-inner .strip figure { flex: none; }
-#space-inner .strip figure { cursor: pointer; transition: transform 0.5s var(--ease); }
-#space-inner .strip figure:hover { transform: translateY(-4px); }
+#space-inner .strip-track { --tilt: 0; }
+#space-inner .strip figure {
+  cursor: pointer;
+  transform: perspective(1100px) rotateY(calc(var(--tilt) * 1deg)) translateY(var(--lift, 0px));
+  transition: transform 0.25s ease-out;
+}
+#space-inner .strip figure:hover { --lift: -4px; }
 #space-inner .strip img {
   height: 38vh; max-height: 420px; width: auto; display: block;
   border-radius: 2px;
@@ -366,7 +379,7 @@ body.hand-on #cursor { opacity: 1; }
   transition: opacity 0.5s var(--ease);
 }
 body.lb-open #lightbox { opacity: 1; pointer-events: auto; }
-#lightbox figure { display: flex; flex-direction: column; gap: 14px; align-items: center; max-width: 86vw; }
+#lightbox figure { display: flex; flex-direction: column; gap: 14px; align-items: center; max-width: 86vw; position: relative; }
 #lightbox img {
   max-width: 86vw; max-height: 76vh; display: block;
   box-shadow: 0 30px 120px rgba(0, 0, 0, 0.7);
@@ -374,6 +387,15 @@ body.lb-open #lightbox { opacity: 1; pointer-events: auto; }
 }
 #lightbox img.lb-anim { animation: lbin 0.45s var(--ease); }
 @keyframes lbin { from { opacity: 0; transform: scale(0.96); } }
+#lightbox img.lb-from-r { animation: lbr 0.55s var(--ease); }
+#lightbox img.lb-from-l { animation: lbl 0.55s var(--ease); }
+@keyframes lbr { from { opacity: 0; transform: translateX(110px) scale(0.97); } }
+@keyframes lbl { from { opacity: 0; transform: translateX(-110px) scale(0.97); } }
+.lb-ghost {
+  position: absolute; max-width: 86vw; max-height: 76vh;
+  border-radius: 2px; pointer-events: none;
+  transition: transform 0.5s var(--ease), opacity 0.5s var(--ease);
+}
 #lightbox figcaption {
   display: flex; gap: 26px; align-items: baseline;
   font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em;
