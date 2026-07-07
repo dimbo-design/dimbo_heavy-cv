@@ -279,10 +279,16 @@ export class Gestures extends EventTarget {
       const dopen = rN.o - r0.o;
       const rdt = Math.max(50, rN.t - r0.t) / 1000;
       let axis = null, dir, vel;
-      if (Math.abs(dry) > 0.15 && Math.abs(dry) > Math.abs(drx) * 1.4 &&
+      // vertical is ONE-DIRECTIONAL by design (the cascade lesson): without
+      // a clutch, a return/wind-up is geometrically the opposite stroke, and
+      // every "smart" disambiguator we stacked just suppressed input — which
+      // reads as lag. So only the downward snap is a gesture; upward finger
+      // motion is a hand coming home and is not even a detection. Going back
+      // belongs to the clutch (pinch-drag) and the palm brush home.
+      if (dry > 0.15 && dry > Math.abs(drx) * 1.4 &&
           r0.o > 0.6 && dopen > 0.06 && dopen < 0.6) {
-        axis = 'y'; dir = dry > 0 ? 'down' : 'up';
-        vel = (Math.abs(dry) * window.innerHeight * this.gain) / rdt;
+        axis = 'y'; dir = 'down';
+        vel = (dry * window.innerHeight * this.gain) / rdt;
       } else if (Math.abs(drx) > 0.17 && Math.abs(drx) > Math.abs(dry) * 1.4 &&
           r0.o > 0.55 && dopen < 0.6) {
         axis = 'x'; dir = drx < 0 ? 'right' : 'left';   // frame x is mirrored
@@ -298,9 +304,8 @@ export class Gestures extends EventTarget {
           this._relSamples.length = 0;
           this._samples.length = 0;        // the same stroke is not also a palm swipe
           this._flickHoldUntil = now + 340; // same direction may repeat quickly
-          // ↕ reading rhythm is slow (wind-up → settle → stroke, 2-3s between
-          // real strokes in the field) — the direction must outlive a pause
-          this._mom[axis] = { dir, vel, until: now + (axis === 'y' ? 4000 : 2600) };
+          // reading direction only exists where two directions do (galleries)
+          if (axis === 'x') this._mom.x = { dir, vel, until: now + 2600 };
           this._swipeCooldownUntil = Math.max(this._swipeCooldownUntil, now + 800);
           this._fistCooldownUntil = Math.max(this._fistCooldownUntil, now + 700);
           this._pinchBlockUntil = now + 450;
@@ -340,11 +345,6 @@ export class Gestures extends EventTarget {
         this._flickHoldUntil = Math.max(this._flickHoldUntil, now + 700);
         this._samples.length = 0;
         this._relSamples.length = 0;
-        // palm swipes carry the reading direction too — Dmitry reads onward
-        // with palm strokes, and the wind-up dip of the NEXT stroke must know
-        // it. A downward brush means "home": the page starts over, no bias.
-        this._mom.y = dy > 0 ? null
-          : { dir: 'up', vel: Math.abs(v.vy), until: now + 4000 };
         this._emit('swipe', { axis: 'y', dir: dy > 0 ? 'down' : 'up', vy: v.vy, pure: true });
       }
     }

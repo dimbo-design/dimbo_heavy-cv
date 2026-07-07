@@ -752,30 +752,21 @@ function onSwipe({ axis, dir, vx, pure }) {
   }
 }
 
-// lazy finger flicks. The owner's stated law, final: THE FINGER MOVES THE
-// SHEET. Stroke up — the sheet rides up, you read on; stroke down — it
-// slides down, you go back. Horizontal the same: the strip follows the
-// finger. Every flick reports back whether it actually moved content —
-// a stroke that met a wall must not hold the reading direction (chapters
-// open at the top; locking momentum on a wall-stroke silenced every real
-// stroke after it — field session 19:26).
+// lazy finger flicks. Vertical is one gesture with one meaning: the snap
+// downward = one step onward, always, instantly — like the wheel this hand
+// lives on. Upward finger motion is not a gesture at all (it's the hand
+// coming home), so nothing can ever fire backwards: going back belongs to
+// the pinch-drag and the palm brush home. Horizontal keeps both directions
+// (galleries need them) under the reading-direction momentum.
 function onFlick({ axis, dir, vel }) {
   let moved = false;
   if (axis === 'y') {
     if (!app.lb && app.spaceId) {
-      const before = app.scroll.target;
       const step = window.innerHeight * 0.52;
-      if (dir === 'up') {
-        if (app.scroll.target >= app.scroll.max - 4) app.scroll.over = -70;
-        app.scroll.target = clamp(app.scroll.target + step, 0, app.scroll.max);
-      } else {
-        if (app.scroll.target <= 4) app.scroll.over = 70;
-        app.scroll.target = clamp(app.scroll.target - step, 0, app.scroll.max);
-      }
+      if (app.scroll.target >= app.scroll.max - 4) app.scroll.over = -70;
+      app.scroll.target = clamp(app.scroll.target + step, 0, app.scroll.max);
       app.scroll.vel = 0;
-      moved = Math.abs(app.scroll.target - before) > 1;
     }
-    app.gestures.noteFlickEffect('y', moved);
     return;
   }
   if (app.lb) {
