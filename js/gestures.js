@@ -48,6 +48,14 @@ export class Gestures extends EventTarget {
     this._mom = { x: null, y: null };   // {dir, vel, until}
   }
 
+  // main reports whether a flick actually moved content. A stroke that met
+  // a wall (chapter top, missing strip) may not hold the reading direction —
+  // otherwise the first stroke of a session, often a return or a bounce,
+  // locks momentum inverted and every real stroke after it goes silent.
+  noteFlickEffect(axis, moved) {
+    if (!moved && this._mom[axis]) this._mom[axis] = null;
+  }
+
   // grab held without movement — the deliberate "close" charge in main
   grabStillMs(now) {
     return this.grabbing && !this._grabLive ? (now ?? performance.now()) - this._grabStartAt : 0;

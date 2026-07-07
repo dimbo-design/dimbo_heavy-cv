@@ -752,33 +752,47 @@ function onSwipe({ axis, dir, vx, pure }) {
   }
 }
 
-// lazy finger flicks — Dmitry's recorded vocabulary. Vertical speaks WHEEL:
-// flick down = read on, flick up = go back. (It was flipped to sheet
-// semantics once, chasing what turned out to be return-strokes misfiring —
-// with momentum in place his clean logs settled it: the hand that lives on
-// a mouse wheel flicks DOWN to advance.) Horizontal speaks drag: the strip
-// follows the finger, like pinch-dragging minus the pinch.
+// lazy finger flicks. The owner's stated law, final: THE FINGER MOVES THE
+// SHEET. Stroke up — the sheet rides up, you read on; stroke down — it
+// slides down, you go back. Horizontal the same: the strip follows the
+// finger. Every flick reports back whether it actually moved content —
+// a stroke that met a wall must not hold the reading direction (chapters
+// open at the top; locking momentum on a wall-stroke silenced every real
+// stroke after it — field session 19:26).
 function onFlick({ axis, dir, vel }) {
+  let moved = false;
   if (axis === 'y') {
-    if (app.lb || !app.spaceId) return;
-    const step = window.innerHeight * 0.52;
-    if (dir === 'down') {
-      if (app.scroll.target >= app.scroll.max - 4) app.scroll.over = -70;
-      app.scroll.target = clamp(app.scroll.target + step, 0, app.scroll.max);
-    } else {
-      if (app.scroll.target <= 4) app.scroll.over = 70;
-      app.scroll.target = clamp(app.scroll.target - step, 0, app.scroll.max);
+    if (!app.lb && app.spaceId) {
+      const before = app.scroll.target;
+      const step = window.innerHeight * 0.52;
+      if (dir === 'up') {
+        if (app.scroll.target >= app.scroll.max - 4) app.scroll.over = -70;
+        app.scroll.target = clamp(app.scroll.target + step, 0, app.scroll.max);
+      } else {
+        if (app.scroll.target <= 4) app.scroll.over = 70;
+        app.scroll.target = clamp(app.scroll.target - step, 0, app.scroll.max);
+      }
+      app.scroll.vel = 0;
+      moved = Math.abs(app.scroll.target - before) > 1;
     }
-    app.scroll.vel = 0;
+    app.gestures.noteFlickEffect('y', moved);
     return;
   }
-  if (app.lb) { lightboxStep(dir === 'left' ? 1 : -1); return; }
+  if (app.lb) {
+    lightboxStep(dir === 'left' ? 1 : -1);
+    app.gestures.noteFlickEffect('x', true);
+    return;
+  }
   if (app.spaceId && !document.body.classList.contains('space-right')) {
     // the sweep usually ends far from where the strip is — aim by height
     const c = app.gestures.cursor;
     const s = hitStrip(c.x, c.y) || nearestStrip(c.y);
-    if (s) s.vel = (dir === 'right' ? 1 : -1) * clamp(Math.abs(vel) * 0.85, 900, 2600);
+    if (s) {
+      s.vel = (dir === 'right' ? 1 : -1) * clamp(Math.abs(vel) * 0.85, 900, 2600);
+      moved = true;
+    }
   }
+  app.gestures.noteFlickEffect('x', moved);
 }
 
 function nearestStrip(y) {
