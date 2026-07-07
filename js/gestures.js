@@ -39,6 +39,7 @@ export class Gestures extends EventTarget {
     this._relSamples = [];        // fingertip minus palm — the lazy-finger signal
     this._relDisp = 0;
     this._flickHoldUntil = 0;
+    this._pinchBlockUntil = 0;    // no grabs while a flick's hand comes home
     // READING DIRECTION per axis (kinetic-scroll practice): in the air the
     // finger's trip home IS the opposite gesture — no glass to lift off from,
     // so per-stroke guessing is impossible (Dmitry nailed this in the field).
@@ -127,8 +128,12 @@ export class Gestures extends EventTarget {
     this._pinchSlow += (h.pinch - this._pinchSlow) * 0.08;
     const wasGrabbing = this.grabbing;
     if (!this._pinched) {
-      // a collapsing fist is not a pinch; neither is a fingertip mid-flick
-      const fingersOut = h.open > 0.85 && this._relDisp < 0.09;
+      // a collapsing fist is not a pinch; neither is a fingertip mid-flick,
+      // nor the pause at the bottom of one — the stroke ends with the tip
+      // resting by the thumb (pinch reads low, rel-motion reads calm) and
+      // field logs showed phantom micro-grabs jerking the scroll right there
+      const fingersOut = h.open > 0.85 && this._relDisp < 0.09 &&
+        now > this._pinchBlockUntil;
       const closingAct = fingersOut && h.pinch < 0.28 && this._pinchSlow - h.pinch > 0.10;
       const hardAct = fingersOut && h.pinch < 0.22 && this._pinchSlow - h.pinch > 0.18;
       this._pinchIn = closingAct ? (this._pinchIn || 0) + 1 : 0;
@@ -284,6 +289,7 @@ export class Gestures extends EventTarget {
           this._mom[axis] = { dir, vel, until: now + 2600 };
           this._swipeCooldownUntil = Math.max(this._swipeCooldownUntil, now + 800);
           this._fistCooldownUntil = Math.max(this._fistCooldownUntil, now + 700);
+          this._pinchBlockUntil = now + 450;
           this._emit('flick', { axis, dir, vel });
         }
       }

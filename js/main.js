@@ -752,16 +752,17 @@ function onSwipe({ axis, dir, vx, pure }) {
   }
 }
 
-// lazy finger flicks — Dmitry's recorded vocabulary, all of it drag
-// semantics (his hand expects the sheet, not the wheel — field-corrected):
-// flick down → the text slides down with the finger (you're moving toward
-// the beginning); flick up → it slides up (reading onward). Horizontal the
-// same: the strip follows the finger, like pinch-dragging minus the pinch.
+// lazy finger flicks — Dmitry's recorded vocabulary. Vertical speaks WHEEL:
+// flick down = read on, flick up = go back. (It was flipped to sheet
+// semantics once, chasing what turned out to be return-strokes misfiring —
+// with momentum in place his clean logs settled it: the hand that lives on
+// a mouse wheel flicks DOWN to advance.) Horizontal speaks drag: the strip
+// follows the finger, like pinch-dragging minus the pinch.
 function onFlick({ axis, dir, vel }) {
   if (axis === 'y') {
     if (app.lb || !app.spaceId) return;
     const step = window.innerHeight * 0.52;
-    if (dir === 'up') {
+    if (dir === 'down') {
       if (app.scroll.target >= app.scroll.max - 4) app.scroll.over = -70;
       app.scroll.target = clamp(app.scroll.target + step, 0, app.scroll.max);
     } else {
