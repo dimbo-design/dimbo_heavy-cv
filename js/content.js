@@ -292,6 +292,15 @@ export const UI = {
     a:  { ru: 'передумали — разбудить', en: 'changed your mind — wake it' },
   },
 
+  asleep: {
+    h:  { ru: 'В этом браузере интерфейс останется спящим.',
+          en: 'In this browser the interface will stay asleep.' },
+    s:  { ru: 'Ему нужно быстрое железо: откройте страницу в Chrome или Opera — и он вас увидит. Или знакомьтесь так:',
+          en: 'It needs fast hardware: open this page in Chrome or Opera and it will see you. Or meet me the simple way:' },
+    a:  { ru: 'всё равно разбудить — будет медленно',
+          en: 'wake it anyway — it will be slow' },
+  },
+
   failed: {
     h:  { ru: 'Разум не загрузился. Такое бывает вдали от сети.',
           en: 'The mind failed to load. It happens far from the network.' },

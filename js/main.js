@@ -292,7 +292,28 @@ function boot() {
   for (const ev of ['enter', 'grabstart', 'tap', 'swipe', 'spreadstart', 'clench', 'unclench'])
     gestures.addEventListener(ev, () => { app.lastActivity = performance.now(); });
 
-  engine.initWorker();
+  // capability gate: without WebGPU the depth net runs on CPU and MediaPipe
+  // falls to the main thread — a slideshow that hurts more than absence.
+  // Such browsers get a considered dead-end; a quiet ghost option remains.
+  (async () => {
+    let capable = false;
+    try { capable = !!(navigator.gpu && await navigator.gpu.requestAdapter()); }
+    catch (_) { capable = false; }
+    if (capable) {
+      engine.initWorker();
+    } else {
+      app.state = 'asleep';
+      hide('invite');
+      show('asleep');
+    }
+  })();
+
+  $('asleep-action').addEventListener('click', () => {
+    hide('asleep');
+    show('invite');
+    app.state = 'boot';
+    engine.initWorker();
+  });
 
   // -- chrome events
   $('invite-action').addEventListener('click', requestCamera);
@@ -1171,6 +1192,10 @@ function renderStatic() {
   setText('denied-s', UI.denied.s[lang]);
   setText('denied-action', UI.denied.a[lang]);
 
+  setText('asleep-h', UI.asleep.h[lang]);
+  setText('asleep-s', UI.asleep.s[lang]);
+  setText('asleep-action', UI.asleep.a[lang]);
+
   setText('failed-h', UI.failed.h[lang]);
   setText('failed-s', UI.failed.s[lang]);
 
@@ -1179,7 +1204,7 @@ function renderStatic() {
   setText('mobile-name', UI.name[lang]);
   setText('mobile-role', UI.role[lang]);
 
-  for (const holder of ['denied-links', 'failed-links', 'mobile-links']) {
+  for (const holder of ['denied-links', 'failed-links', 'mobile-links', 'asleep-links']) {
     const el = $(holder);
     if (!el) continue;
     el.innerHTML = UI.contactsMini.map((c) =>
@@ -1211,6 +1236,7 @@ function renderTelemetry() {
   const rows = [];
   rows.push(app.cameraOn ? T.eyeOn[lang] : T.eyeOff[lang]);
   if (app.state === 'failed') rows.push('—');
+  else if (app.state === 'asleep') rows.push(`${T.mindLoad[lang]} · —`);
   else if (!app.modelReady) rows.push(`${T.mindLoad[lang]} · ${Math.round(app.loadP * 100)}%`);
   else rows.push(app.device === 'webgpu' ? T.mindGpu[lang] : T.mindCpu[lang]);
   if (app.cameraOn) {
