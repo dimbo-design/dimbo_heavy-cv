@@ -1,12 +1,10 @@
 // Gesture interpretation over hand summaries.
 //
-// Design rule: a MINIMAL, conflict-free vocabulary. One motion — one meaning:
-//   hand moves            → cursor + focus (nothing else reacts)
-//   dwell still on target → charge ring → act        (open node / take pdf)
-//   grab (pinch OR fist) + move → drag, axis-locked  (strip ⟷ · content ↕)
-//   grab held still       → charge ring → close      (chapter / lightbox)
-//   quick pinch (tap)     → silent click at the cursor
-// Every action is reversible and previewed by the ring before it fires.
+// Design rule: a MINIMAL, conflict-free vocabulary built on two hand states:
+//   open-ish hand → pointing (through your own reflection on the main screen)
+//   pinch = grab in the air → drag, axis-locked; a fast release = a throw
+// A quick pinch is a click. An open-palm fling flips (lightbox, strips).
+// The fist is deliberately NOT a gesture: a relaxed hand reads as one.
 
 export class Gestures extends EventTarget {
   constructor() {
@@ -20,8 +18,6 @@ export class Gestures extends EventTarget {
     this.gain = 1.3;
 
     this._pinched = false;
-    this._fisted = false;
-    this._grabSource = null;      // 'pinch' | 'fist'
     this._grabStartAt = 0;
     this._grabStart = { x: 0, y: 0 };
     this._grabMoved = 0;
@@ -29,6 +25,7 @@ export class Gestures extends EventTarget {
 
     this._lastSeen = 0;
     this._lastT = 0;
+    this._swipeCooldownUntil = 0;
     this._samples = [];
     this._hasCursor = false;
   }
@@ -53,15 +50,12 @@ export class Gestures extends EventTarget {
       this._emit('enter', {});
     }
 
-    // ---- grab state: pinch OR fist, with hysteresis
+    // ---- grab state: pinch only ("grab the air"); a relaxed hand must stay free
     const wasGrabbing = this.grabbing;
-    if (!this._pinched && h.pinch < 0.34) this._pinched = true;
-    else if (this._pinched && h.pinch > 0.48) this._pinched = false;
-    if (!this._fisted && h.open < 0.80) this._fisted = true;
-    else if (this._fisted && h.open > 1.02) this._fisted = false;
+    if (!this._pinched && h.pinch < 0.32) this._pinched = true;
+    else if (this._pinched && h.pinch > 0.46) this._pinched = false;
     this.pinchStrength = clamp((0.55 - h.pinch) / 0.35, 0, 1);
-    this.grabbing = this._pinched || this._fisted;
-    if (this.grabbing && !wasGrabbing) this._grabSource = this._pinched ? 'pinch' : 'fist';
+    this.grabbing = this._pinched;
 
     let mode;
     if (this.grabbing) mode = 'grab';
@@ -69,9 +63,10 @@ export class Gestures extends EventTarget {
     else if (h.open > 1.22) mode = 'palm';
     else mode = 'hand';
     this.mode = mode;
+    this.hand = h;                 // raw frame-space geometry for the mirror
 
     // ---- cursor
-    const src = mode === 'point' ? h.index : this.grabbing && this._grabSource === 'pinch' ? h.pinchPoint : h.palm;
+    const src = mode === 'point' ? h.index : this.grabbing ? h.pinchPoint : h.palm;
     const vw = window.innerWidth, vh = window.innerHeight;
     const x = ((1 - src.x) - 0.5) * this.gain * vw + vw / 2;
     const y = (src.y - 0.5) * this.gain * vh + vh / 2;
@@ -107,7 +102,7 @@ export class Gestures extends EventTarget {
       this._grabMoved += Math.hypot(this.cursor.x - px, this.cursor.y - py);
       if (!this._grabLive && this._grabMoved > 14) {
         this._grabLive = true;
-        this._emit('grabstart', { x: this._grabStart.x, y: this._grabStart.y, source: this._grabSource });
+        this._emit('grabstart', { x: this._grabStart.x, y: this._grabStart.y });
       }
       if (this._grabLive) {
         this._emit('grabmove', {
@@ -118,13 +113,26 @@ export class Gestures extends EventTarget {
     } else if (!this.grabbing && wasGrabbing) {
       if (this._grabLive) {
         this._emit('grabend', this._velocity());
-      } else if (this._grabSource === 'pinch' &&
-                 now - this._grabStartAt < 260 && this._grabMoved < 30) {
+      } else if (now - this._grabStartAt < 260 && this._grabMoved < 30) {
         this._emit('tap', { x: this.cursor.x, y: this.cursor.y });
       }
       this._grabLive = false;
     }
 
+    // ---- open-palm horizontal fling: flips things (lightbox, strips)
+    if (!this.grabbing && (mode === 'palm' || mode === 'hand') &&
+        now > this._swipeCooldownUntil && this._samples.length > 3) {
+      const s0 = this._samples[0];
+      const dx = this.cursor.x - s0.x;
+      const dy = this.cursor.y - s0.y;
+      const v = this._velocity();
+      if (Math.abs(dx) > window.innerWidth * 0.13 &&
+          Math.abs(dx) > Math.abs(dy) * 1.6 && Math.abs(v.vx) > 1000) {
+        this._swipeCooldownUntil = now + 800;
+        this._samples.length = 0;
+        this._emit('swipe', { dir: dx > 0 ? 'right' : 'left', vx: v.vx });
+      }
+    }
   }
 
   _dropHand() {
@@ -133,7 +141,6 @@ export class Gestures extends EventTarget {
     this.mode = 'idle';
     this.grabbing = false;
     this._pinched = false;
-    this._fisted = false;
     this._grabLive = false;
     this._hasCursor = false;
     this._samples.length = 0;

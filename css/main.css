@@ -188,6 +188,13 @@ body.named #identity { opacity: 1; transform: none; }
   background: radial-gradient(ellipse at 30% 50%, rgba(10, 10, 13, 0.8), transparent 72%);
   filter: blur(4px);
 }
+.node .n-bar {
+  display: block; height: 2px; width: 100%;
+  margin-top: 1px;
+  background: var(--ink);
+  transform: scaleX(0); transform-origin: left center;
+  opacity: 0.85;
+}
 .node.focus { opacity: 1; }
 .node.pulse .n-label { animation: nodepulse 1.5s var(--ease); }
 @keyframes nodepulse {
@@ -310,6 +317,8 @@ body.space-open .blk {
   100% { border-bottom-color: var(--line); letter-spacing: 0; opacity: 1; }
 }
 
+#space-inner.page-grabbed .blk { transition: none; }
+
 /* photo strips — draggable matter, escaping the text column */
 #space-inner .strip {
   width: 82vw; margin: 26px 0 30px;
@@ -348,7 +357,7 @@ body.space-open .blk {
   opacity: 0; transition: opacity 0.5s;
   will-change: transform;
 }
-body.hand-on #cursor { opacity: 1; }
+body.cursor-on #cursor { opacity: 1; }
 #cursor svg { width: 100%; height: 100%; overflow: visible; }
 #cursor circle { fill: none; }
 #cursor .c-ring {
@@ -385,6 +394,7 @@ body.lb-open #lightbox { opacity: 1; pointer-events: auto; }
   box-shadow: 0 30px 120px rgba(0, 0, 0, 0.7);
   border-radius: 2px;
 }
+#lightbox #lb-img { transition: opacity 0.25s; }
 #lightbox img.lb-anim { animation: lbin 0.45s var(--ease); }
 @keyframes lbin { from { opacity: 0; transform: scale(0.96); } }
 #lightbox img.lb-from-r { animation: lbr 0.55s var(--ease); }

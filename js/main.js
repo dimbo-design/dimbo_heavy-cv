@@ -3,9 +3,10 @@
 // States: boot → (invite) → watching ⇄ present ⇄ space(chapter)
 //                ↘ denied / failed          mobile is a separate early exit.
 //
-// Opening a chapter: dwell a calm hand on a node (ring charges), or click.
-// Dragging: grab (pinch/fist) + move, axis-locked. Closing: grab held still
-// (ring charges), stepping out of frame, Esc, or a click on the empty side.
+// Main screen: your reflection is the pointer — its fingertip touches the
+// node labels directly; dwell fills a bar on the node, then it opens.
+// Chapters: pinch = grab the matter (axis-locked), throw it away to close.
+// Silent fallbacks everywhere: click, wheel, drag, Esc.
 
 import { CONFIG } from './config.js';
 import { NODES, UI, renderPanel } from './content.js';
@@ -135,8 +136,11 @@ const app = {
   loadP: 0,
   presentSince: 0,
   nodePos: new Map(),       // id → {x, y} screen px
+  pointer: null,            // fingertip of the REFLECTION, screen px (main screen)
+  lastDepth: null,
   hold: { p: 0, target: null, until: 0 },
   scroll: { y: 0, target: 0, vel: 0, max: 0 },
+  pageX: 0, pageXVel: 0,    // chapter grabbed/thrown sideways
   strips: [],
   drag: null,               // null | {kind:'strip'|'scroll'|'stir'|'lightbox', ...}
   lb: null,                 // lightbox: {items:[{src,cap}], idx, acc}
@@ -181,6 +185,7 @@ function boot() {
   engine.addEventListener('depth', (e) => {
     const { data, width, height, stats } = e.detail;
     field.setDepth(data, width, height, engine.inferMs);
+    app.lastDepth = { data, width, height };     // texture copies; safe to keep
     signals.feed(stats, performance.now());
   });
 
@@ -194,7 +199,7 @@ function boot() {
   hands.addEventListener('fatal', () => { app.handsFailed = true; });
   hands.addEventListener('hands', (e) => gestures.ingest(e.detail));
 
-  for (const ev of ['enter', 'leave', 'grabstart', 'grabend', 'tap']) {
+  for (const ev of ['enter', 'leave', 'grabstart', 'grabend', 'tap', 'swipe']) {
     gestures.addEventListener(ev, (e) => {
       app.glog.push(`${(performance.now() / 1000).toFixed(1)}s ${ev}${e.detail?.dir ? ' ' + e.detail.dir : ''}`);
       if (app.glog.length > 6) app.glog.shift();
@@ -211,7 +216,8 @@ function boot() {
   gestures.addEventListener('grabmove', (e) => onGrabMove(e.detail));
   gestures.addEventListener('grabend', (e) => onGrabEnd(e.detail));
   gestures.addEventListener('tap', (e) => onAirTap(e.detail));
-  for (const ev of ['enter', 'grabstart', 'tap'])
+  gestures.addEventListener('swipe', (e) => onSwipe(e.detail));
+  for (const ev of ['enter', 'grabstart', 'tap', 'swipe'])
     gestures.addEventListener(ev, () => { app.lastActivity = performance.now(); });
 
   engine.initWorker();
@@ -321,7 +327,7 @@ function buildNodes() {
     const el = document.createElement('button');
     el.className = 'node';
     el.dataset.id = n.id;
-    el.innerHTML = `<span class="n-label"></span><span class="n-sub"></span>`;
+    el.innerHTML = `<span class="n-label"></span><i class="n-bar"></i><span class="n-sub"></span>`;
     el.addEventListener('click', () => openSpace(n.id));
     wrap.appendChild(el);
   }
@@ -358,6 +364,7 @@ function openSpace(id) {
 
   $('space-inner').innerHTML = renderPanel(node, lang);
   app.scroll.y = 0; app.scroll.target = 0; app.scroll.vel = 0;
+  app.pageX = 0; app.pageXVel = 0;
   $('space-inner').style.transform = 'translateY(0px)';
   collectStrips();
 
@@ -407,10 +414,12 @@ function hitStrip(x, y) {
 
 function onGrabStart({ x, y }) {
   if (app.lb) {
-    app.drag = { kind: 'lightbox', acc: 0 };
+    // axis lock inside the lightbox too: ⟷ walks the photos, ↕ carries
+    // the photo away (release far → it closes, like tossing it down)
+    app.drag = { kind: 'lb-pending', accX: 0, accY: 0 };
   } else if (app.spaceId) {
-    // axis lock: the first centimetres decide — horizontal over a strip
-    // drags the strip, anything vertical scrolls; the axis never flips mid-drag
+    // axis lock: horizontal over a strip drags the strip; horizontal on
+    // text grabs the whole chapter (throw it to close); vertical scrolls
     app.drag = { kind: 'pending', strip: hitStrip(x, y), accX: 0, accY: 0 };
   } else if (app.state === 'present') {
     app.drag = { kind: 'stir' };
@@ -424,15 +433,29 @@ function onGrabMove({ dx, dy }) {
     d.accX += dx; d.accY += dy;
     if (Math.hypot(d.accX, d.accY) < 12) return;
     const { accX, accY, strip } = d;
-    if (strip && Math.abs(accX) > Math.abs(accY)) {
-      app.drag = d = { kind: 'strip', strip };
-      strip.vel = 0;
-      strip.el.classList.add('dragging');
-      moveStrip(strip, accX);
+    if (Math.abs(accX) > Math.abs(accY)) {
+      if (strip) {
+        app.drag = d = { kind: 'strip', strip };
+        strip.vel = 0;
+        strip.el.classList.add('dragging');
+        moveStrip(strip, accX);
+        return;
+      }
+      // grabbed the chapter itself
+      app.drag = d = { kind: 'page', acc: accX };
+      $('space-inner').classList.add('page-grabbed');
+      app.pageX = accX * 0.45;
       return;
     }
     app.drag = d = { kind: 'scroll' };
     app.scroll.target = clamp(app.scroll.target - accY, 0, app.scroll.max);
+  }
+  if (d.kind === 'lb-pending') {
+    d.accX += dx; d.accY += dy;
+    if (Math.hypot(d.accX, d.accY) < 12) return;
+    d = app.drag = Math.abs(d.accX) > Math.abs(d.accY)
+      ? { kind: 'lightbox', acc: d.accX }
+      : { kind: 'lb-toss', acc: d.accY };
   }
   if (d.kind === 'lightbox') {
     d.acc += dx;
@@ -441,6 +464,14 @@ function onGrabMove({ dx, dy }) {
       lightboxStep(d.acc < 0 ? 1 : -1);
       d.acc = 0;
     }
+  } else if (d.kind === 'lb-toss') {
+    d.acc += dy;
+    const k = clamp(Math.abs(d.acc) / 260, 0, 1);
+    $('lb-img').style.transform = `translateY(${d.acc * 0.5}px) scale(${1 - k * 0.06})`;
+    $('lb-img').style.opacity = String(1 - k * 0.35);
+  } else if (d.kind === 'page') {
+    d.acc += dx;
+    app.pageX = d.acc * 0.45;
   } else if (d.kind === 'strip') {
     moveStrip(d.strip, dx);
   } else if (d.kind === 'scroll') {
@@ -454,8 +485,20 @@ function onGrabMove({ dx, dy }) {
 function onGrabEnd({ vx, vy }) {
   const d = app.drag;
   if (!d) return;
-  if (d.kind === 'lightbox') {
+  if (d.kind === 'lightbox' || d.kind === 'lb-pending') {
     $('lb-img').style.transform = '';
+  } else if (d.kind === 'lb-toss') {
+    const img = $('lb-img');
+    img.style.transform = '';
+    img.style.opacity = '';
+    if (Math.abs(d.acc) > 170 || Math.abs(vy) > 900) closeLightbox();
+  } else if (d.kind === 'page') {
+    $('space-inner').classList.remove('page-grabbed');
+    const thrown = Math.abs(d.acc) > window.innerWidth * 0.18 || Math.abs(vx) > 900;
+    if (thrown) {
+      app.pageXVel = clamp(vx, -2600, 2600) || Math.sign(d.acc) * 1600;
+      closeSpace();                    // the chapter flies off as it fades
+    }
   } else if (d.kind === 'strip') {
     d.strip.vel = vx;
     d.strip.el.classList.remove('dragging');
@@ -463,6 +506,15 @@ function onGrabEnd({ vx, vy }) {
     app.scroll.vel = -vy;
   }
   app.drag = null;
+}
+
+// open-palm fling: flips — never closes anything
+function onSwipe({ dir, vx }) {
+  if (app.lb) { lightboxStep(dir === 'left' ? 1 : -1); return; }
+  if (app.spaceId && app.gestures.active) {
+    const s = hitStrip(app.gestures.cursor.x, app.gestures.cursor.y);
+    if (s) s.vel = vx * 0.9;
+  }
 }
 
 // air-tap: a quick pinch acts like a click at the cursor
@@ -679,6 +731,7 @@ function loopBody(t) {
 
     if (app.state === 'present') {
       const handActive = gestures.active;
+      app.pointer = handActive ? reflectionPointer() : null;
       // the scene turns with the head only — slow and stable;
       // the hand moves nothing but its own small ring
       const headX = clamp((signals.cx - 0.5) * 2 * CONFIG.focus.gain, -1.6, 1.6);
@@ -702,12 +755,35 @@ function loopBody(t) {
   if (t - lastTele > 500) { lastTele = t; renderTelemetry(); renderDebug(); }
 }
 
+// The pointer IS the visitor's reflection: the tracked fingertip mapped
+// onto the mirror plane and projected with the same matrix as the labels —
+// so what you see touching a label is literally your own hand of dots.
+function reflectionPointer() {
+  const g = app.gestures;
+  const h = g.hand;
+  if (!h) return null;
+  const tip = h.pointing ? h.index : g.grabbing ? h.pinchPoint : h.palm;
+  let z = 1.2;
+  const ld = app.lastDepth;
+  if (ld) {
+    const ix = clamp(Math.round(tip.x * ld.width), 1, ld.width - 2);
+    const iy = clamp(Math.round(tip.y * ld.height), 1, ld.height - 2);
+    let m = 0;
+    for (let dy = -1; dy <= 1; dy++)
+      for (let dx = -1; dx <= 1; dx++)
+        m = Math.max(m, ld.data[(iy + dy) * ld.width + (ix + dx)]);
+    z = (m / 255) * CONFIG.depthAmp;
+  }
+  const local = app.field.frameToLocal(tip.x, tip.y, z);
+  const p = app.field.projectPoint(local.x, local.y, local.z);
+  return p.behind ? null : { x: p.x, y: p.y, local };
+}
+
 function updateNodes(focusX, handActive) {
-  const cursorPx = handActive
-    ? app.gestures.cursor.x
+  const pt = handActive && app.pointer ? app.pointer : null;
+  const cursorPx = pt ? pt.x
     : window.innerWidth * (0.5 + 0.5 * clamp(focusX, -1, 1) * 0.8);
-  const cursorPy = handActive
-    ? app.gestures.cursor.y
+  const cursorPy = pt ? pt.y
     : window.innerHeight * clamp(app.signals.cy * 1.5 - 0.2, 0.08, 0.92);
 
   let best = null, bestDist = CONFIG.focus.maxDistPx;
@@ -728,6 +804,15 @@ function updateNodes(focusX, handActive) {
     if (d < bestDist) { bestDist = d; best = n.id; }
   }
 
+  // sticky focus: once a node is lit, it takes a real departure to lose it —
+  // otherwise tracking jitter keeps resetting the dwell bar
+  if (app.focusedId && best !== app.focusedId) {
+    const cur = app.nodePos.get(app.focusedId);
+    if (cur && Math.hypot(cur.x - cursorPx, cur.y - cursorPy) < CONFIG.focus.maxDistPx * 1.45) {
+      best = app.focusedId;
+    }
+  }
+
   if (best !== app.focusedId) {
     app.focusedId = best;
     app.focusChangedAt = performance.now();
@@ -741,30 +826,14 @@ function updateNodes(focusX, handActive) {
 // dwell-to-open: hold an open hand (or a pointing finger) on a node
 function updateHold(dt, now) {
   const g = app.gestures;
-
-  // a grab held still is the one deliberate "close" gesture —
-  // squeeze and hold, the ring charges, the chapter lets you go
-  if ((app.spaceId || app.lb) && g.grabStillMs(now) > 350 && now > app.hold.until) {
-    app.hold.target = 'close';
-    app.hold.p = Math.min(1, (g.grabStillMs(now) - 350) / CONFIG.hold.ms);
-    if (app.hold.p >= 1) {
-      app.hold.p = 0;
-      app.hold.until = now + 1500;
-      if (app.lb) closeLightbox(); else closeSpace();
-    }
-    return;
-  }
-  if (app.hold.target === 'close') { app.hold.target = null; app.hold.p = 0; }
-
-  const handCalm = g.active &&
-    (g.mode === 'palm' || g.mode === 'point' || g.mode === 'hand') &&
+  const handCalm = g.active && !g.grabbing &&
     g.speed < CONFIG.hold.maxSpeed && now > app.hold.until;
 
-  // in browse: charge on the focused node → open chapter
-  // in a chapter: charge on the pdf link → the résumé downloads itself
+  // in browse: dwell on the focused node → a bar fills ON THE NODE → open
+  // in a chapter: dwell on the pdf link → the résumé downloads itself
   const target =
     app.state !== 'present' ? null
-    : !app.spaceId && app.focusedId ? 'node:' + app.focusedId
+    : !app.spaceId && app.focusedId && app.pointer ? 'node:' + app.focusedId
     : app.spaceId && app.hoverDl ? 'dl' : null;
 
   if (handCalm && target) {
@@ -786,12 +855,29 @@ function updateHold(dt, now) {
     app.hold.p = Math.max(0, app.hold.p - dt * 2.4);
     if (!target) app.hold.target = null;
   }
+
+  renderHoldBar();
+}
+
+// the dwell indicator lives on the node itself: silent for the first 40%
+// of the hold, then a line under the label fills over the remaining 60%
+function renderHoldBar() {
+  const active = app.hold.target?.startsWith('node:') ? app.hold.target.slice(5) : null;
+  for (const el of document.querySelectorAll('.node')) {
+    const bar = el.querySelector('.n-bar');
+    if (!bar) continue;
+    const pct = el.dataset.id === active
+      ? clamp((app.hold.p - 0.4) / 0.6, 0, 1) : 0;
+    bar.style.transform = `scaleX(${pct})`;
+  }
 }
 
 function updateCursor() {
   const g = app.gestures;
   const el = $('cursor');
-  if (!g.active || app.state !== 'present') { app.hoverDl = null; return; }
+  const wanted = g.active && app.state === 'present' && (app.spaceId || app.lb);
+  document.body.classList.toggle('cursor-on', !!wanted);
+  if (!wanted) { app.hoverDl = null; return; }
   el.style.transform = `translate3d(${g.cursor.x}px, ${g.cursor.y}px, 0)`;
 
   // the one gesture-enabled link: the pdf résumé
@@ -802,7 +888,7 @@ function updateCursor() {
     app.hoverDl = null;
   }
 
-  const over = (app.focusedId && !app.spaceId) || app.hoverDl ? ' on-target' : '';
+  const over = app.hoverDl ? ' on-target' : '';
   el.className = (g.mode === 'grab' ? 'm-grab' : g.mode === 'palm' ? 'm-palm'
     : g.mode === 'point' ? 'm-point' : '') + over;
   const C = 119.4;
@@ -810,8 +896,20 @@ function updateCursor() {
 }
 
 function updateSpacePhysics(dt) {
-  if (!app.spaceId) return;
   const inner = $('space-inner');
+
+  // thrown-away chapter keeps flying while it fades
+  if (Math.abs(app.pageXVel) > 1) {
+    app.pageX += app.pageXVel * dt;
+    app.pageXVel *= Math.exp(-dt * 2.2);
+  } else if (!app.drag || app.drag.kind !== 'page') {
+    app.pageX += (0 - app.pageX) * (1 - Math.exp(-dt * 10));   // spring home
+  }
+
+  if (!app.spaceId) {
+    if (Math.abs(app.pageX) > 0.5) inner.style.transform = `translateX(${app.pageX}px)`;
+    return;
+  }
 
   app.scroll.max = Math.max(0, inner.scrollHeight - window.innerHeight);
   if (Math.abs(app.scroll.vel) > 5) {
@@ -819,7 +917,7 @@ function updateSpacePhysics(dt) {
     app.scroll.vel *= Math.exp(-dt * 3.2);
   }
   app.scroll.y += (app.scroll.target - app.scroll.y) * (1 - Math.exp(-dt * 9));
-  inner.style.transform = `translateY(${-app.scroll.y}px)`;
+  inner.style.transform = `translate(${app.pageX}px, ${-app.scroll.y}px)`;
 
   for (const s of app.strips) {
     const { min, max } = stripBounds(s);
@@ -843,14 +941,17 @@ function updateSpacePhysics(dt) {
   }
 }
 
-// the hand physically touches the particle fabric
+// the hand physically touches the particle fabric — exactly where the
+// visitor sees their own hand in the mirror
 function updateFieldTouch() {
   const g = app.gestures;
-  if (g.active && app.state === 'present') {
-    const strength = 0.2 + 0.45 * g.pinchStrength;
-    app.field.setHandScreen(g.cursor.x, g.cursor.y, strength);
+  if (g.active && app.state === 'present' && g.hand) {
+    const tip = g.hand.pointing ? g.hand.index : g.hand.palm;
+    const local = app.field.frameToLocal(tip.x, tip.y, 0);
+    const strength = 0.22 + 0.4 * g.pinchStrength;
+    app.field.setHandLocal(local.x, local.y, strength);
   } else {
-    app.field.setHandScreen(null, 0, 0);
+    app.field.setHandLocal(null, 0, 0);
   }
 }
 

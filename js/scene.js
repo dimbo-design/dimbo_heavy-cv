@@ -204,6 +204,33 @@ export class Field {
     this.anchors.set(id, o);
   }
 
+  // Project a point given in the form's local space to CSS pixels.
+  projectPoint(x, y, z) {
+    this._wp.set(x, y, z).applyMatrix4(this.group.matrixWorld);
+    const dist = this._wp.distanceTo(this.camera.position);
+    this._wp.project(this.camera);
+    return {
+      x: (this._wp.x * 0.5 + 0.5) * this.w,
+      y: (-this._wp.y * 0.5 + 0.5) * this.h,
+      scale: THREE.MathUtils.clamp(13.5 / dist, 0.75, 1.25),
+      behind: this._wp.z > 1,
+    };
+  }
+
+  // Where a camera-frame point (0..1, unmirrored) lives on the mirror plane.
+  frameToLocal(hx, hy, z) {
+    return {
+      x: ((1 - hx) - 0.5) * CONFIG.plane.width,
+      y: ((1 - hy) - 0.5) * CONFIG.plane.height,
+      z: z ?? 0,
+    };
+  }
+
+  setHandLocal(x, y, strength) {
+    this._handStrength += (strength - this._handStrength) * 0.25;
+    if (x !== null) this._handTarget.set(x, y, 0);
+  }
+
   // Project an anchor to CSS pixels. Returns {x, y, scale, behind}.
   projectAnchor(id) {
     const o = this.anchors.get(id);
@@ -249,9 +276,11 @@ export class Field {
     if (progress !== undefined) this.tProgress = Math.max(this.tProgress, progress);
   }
 
+  // barely-there: any visible turning reads as jitter, so the scene is
+  // effectively static — a fraction of a degree, slowly
   setGaze(focusX, cy) {
-    this.rotTarget.y = focusX * 0.13;
-    this.rotTarget.x = (cy - 0.5) * -0.12;
+    this.rotTarget.y = focusX * 0.022;
+    this.rotTarget.x = (cy - 0.5) * -0.018;
   }
 
   // pose: null (center stage) or {x, rotY, scale, dim}
@@ -322,7 +351,7 @@ export class Field {
     this._stirRot = THREE.MathUtils.clamp(this._stirRot, -0.6, 0.6);
     this._stirX = THREE.MathUtils.clamp(this._stirX, -0.4, 0.4);
 
-    const kr = 1 - Math.exp(-dt * 3.0);
+    const kr = 1 - Math.exp(-dt * 1.1);
     const targetY = this.rotTarget.y + this._poseRotY + this._stirRot;
     const targetX = this.rotTarget.x + this._stirX;
     this.group.rotation.y += (targetY - this.group.rotation.y) * kr;

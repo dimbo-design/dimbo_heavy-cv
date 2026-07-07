@@ -71,7 +71,7 @@ export const CONFIG = {
     handsIdle: 140,
   },
 
-  hold: { ms: 750, maxSpeed: 280 },       // dwell-to-open charge
+  hold: { ms: 900, maxSpeed: 420 },       // dwell charge: bar appears at 40%, fills over the rest
 
   pump: { minIntervalMs: 70 },
 };
