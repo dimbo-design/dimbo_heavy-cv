@@ -140,6 +140,7 @@ const app = {
   pointer: null,            // fingertip of the REFLECTION, screen px (main screen)
   lastDepth: null,
   hold: { p: 0, target: null, until: 0 },
+  lbCooldownUntil: 0,
   scroll: { y: 0, target: 0, vel: 0, max: 0 },
   pageX: 0, pageXVel: 0,    // chapter grabbed/thrown sideways
   strips: [],
@@ -585,6 +586,12 @@ function onSwipe({ axis, dir, vx }) {
   }
   if (app.lb) { lightboxStep(dir === 'left' ? 1 : -1); return; }
   if (app.spaceId && app.gestures.active) {
+    // chapters that live on the right close with a rightward brush —
+    // the content leaves in its own direction (they have no strips)
+    if (dir === 'right' && document.body.classList.contains('space-right')) {
+      closeSpace();
+      return;
+    }
     const s = hitStrip(app.gestures.cursor.x, app.gestures.cursor.y);
     if (s) s.vel = vx * 0.9;
   }
@@ -626,6 +633,7 @@ function currentStripItems() {
 }
 
 function openLightbox(fig) {
+  if (performance.now() < app.lbCooldownUntil) return;
   const figures = currentStripItems();
   const idx = figures.indexOf(fig);
   if (idx < 0) return;
@@ -750,6 +758,7 @@ function closeLightbox() {
     }
   }
   app.lb = null;
+  app.lbCooldownUntil = performance.now() + 800;
   document.body.classList.remove('lb-open');
 }
 

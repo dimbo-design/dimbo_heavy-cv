@@ -145,18 +145,24 @@ export class Gestures extends EventTarget {
     // ---- clench / unclench: fast palm↔fist transitions against the slow
     // openness baseline. A relaxed hand floats mid-range and crosses neither.
     this._openSlow += (h.open - this._openSlow) * 0.08;
-    if (!this._pinched && now > this._fistCooldownUntil) {
-      if (h.open < 0.72 && this._openSlow - h.open > 0.35) {
-        this._fistCooldownUntil = now + 700;
+    // Field logs: fast motion blurs the landmarks and the fingers "collapse"
+    // for a frame or two — so fist acts demand a SLOW hand and two frames.
+    // A real clench is done with a steady hand; a brush never is.
+    if (!this._pinched && now > this._fistCooldownUntil && this.speed < 700) {
+      const closing = h.open < 0.72 && this._openSlow - h.open > 0.35;
+      const opening = h.open > 1.28 && h.open - this._openSlow > 0.35;
+      this._fistIn = closing ? (this._fistIn || 0) + 1 : 0;
+      this._fistOut = opening ? (this._fistOut || 0) + 1 : 0;
+      if (this._fistIn >= 2 || this._fistOut >= 2) {
+        const type = this._fistIn >= 2 ? 'clench' : 'unclench';
+        this._fistIn = 0; this._fistOut = 0;
+        this._fistCooldownUntil = now + 900;
         this._swipeCooldownUntil = Math.max(this._swipeCooldownUntil, now + 600);
         this._openSlow = h.open;
-        this._emit('clench', { x: this.cursor.x, y: this.cursor.y });
-      } else if (h.open > 1.28 && h.open - this._openSlow > 0.35) {
-        this._fistCooldownUntil = now + 700;
-        this._swipeCooldownUntil = Math.max(this._swipeCooldownUntil, now + 600);
-        this._openSlow = h.open;
-        this._emit('unclench', { x: this.cursor.x, y: this.cursor.y });
+        this._emit(type, { x: this.cursor.x, y: this.cursor.y });
       }
+    } else {
+      this._fistIn = 0; this._fistOut = 0;
     }
 
     // ---- grab lifecycle with tap detection
@@ -199,6 +205,7 @@ export class Gestures extends EventTarget {
       if (Math.abs(dx) > window.innerWidth * 0.13 &&
           Math.abs(dx) > Math.abs(dy) * 1.6 && Math.abs(v.vx) > 1000) {
         this._swipeCooldownUntil = now + 800;
+        this._fistCooldownUntil = Math.max(this._fistCooldownUntil, now + 700);
         this._samples.length = 0;
         this._emit('swipe', { axis: 'x', dir: dx > 0 ? 'right' : 'left', vx: v.vx });
       } else if (mode === 'palm' &&
@@ -207,6 +214,7 @@ export class Gestures extends EventTarget {
         // strictly an OPEN palm brushing down — half-closed scroll flicks
         // must never close anything
         this._swipeCooldownUntil = now + 900;
+        this._fistCooldownUntil = Math.max(this._fistCooldownUntil, now + 700);
         this._samples.length = 0;
         this._emit('swipe', { axis: 'y', dir: 'down', vy: v.vy });
       }
