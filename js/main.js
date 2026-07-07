@@ -284,7 +284,7 @@ function boot() {
     }
   });
 
-  for (const ev of ['enter', 'leave', 'grabstart', 'grabend', 'tap', 'swipe', 'spreadstart', 'spreadend', 'clench', 'unclench']) {
+  for (const ev of ['enter', 'leave', 'grabstart', 'grabend', 'tap', 'swipe', 'flick', 'spreadstart', 'spreadend', 'clench', 'unclench']) {
     gestures.addEventListener(ev, (e) => {
       const h = gestures.hand;
       const line = `${(performance.now() / 1000).toFixed(1)}s ${ev}` +
@@ -309,6 +309,7 @@ function boot() {
   gestures.addEventListener('grabend', (e) => onGrabEnd(e.detail));
   gestures.addEventListener('tap', (e) => onAirTap(e.detail));
   gestures.addEventListener('swipe', (e) => onSwipe(e.detail));
+  gestures.addEventListener('flick', (e) => onFlick(e.detail));
   gestures.addEventListener('spreadstart', () => onSpreadStart());
   gestures.addEventListener('spreadmove', (e) => onSpreadMove(e.detail));
   gestures.addEventListener('spreadend', (e) => onSpreadEnd(e.detail));
@@ -749,6 +750,45 @@ function onSwipe({ axis, dir, vx, pure }) {
     const s = hitStrip(app.gestures.cursor.x, app.gestures.cursor.y);
     if (s) s.vel = vx * 0.9;
   }
+}
+
+// lazy finger flicks — Dmitry's recorded vocabulary. Vertical = wheel
+// semantics: flick the finger down, the text goes down (the palm swipe above
+// keeps its touch semantics — both were field-learned, they coexist).
+// Horizontal = drag semantics: the strip follows the finger, exactly like
+// pinch-dragging it, minus the pinch.
+function onFlick({ axis, dir, vel }) {
+  if (axis === 'y') {
+    if (app.lb || !app.spaceId) return;
+    const step = window.innerHeight * 0.52;
+    if (dir === 'down') {
+      if (app.scroll.target >= app.scroll.max - 4) app.scroll.over = -70;
+      app.scroll.target = clamp(app.scroll.target + step, 0, app.scroll.max);
+    } else {
+      if (app.scroll.target <= 4) app.scroll.over = 70;
+      app.scroll.target = clamp(app.scroll.target - step, 0, app.scroll.max);
+    }
+    app.scroll.vel = 0;
+    return;
+  }
+  if (app.lb) { lightboxStep(dir === 'left' ? 1 : -1); return; }
+  if (app.spaceId && !document.body.classList.contains('space-right')) {
+    // the sweep usually ends far from where the strip is — aim by height
+    const c = app.gestures.cursor;
+    const s = hitStrip(c.x, c.y) || nearestStrip(c.y);
+    if (s) s.vel = (dir === 'right' ? 1 : -1) * clamp(Math.abs(vel) * 0.85, 900, 2600);
+  }
+}
+
+function nearestStrip(y) {
+  let best = null, bd = Infinity;
+  for (const s of app.strips) {
+    const r = s.el.getBoundingClientRect();
+    if (!r.height) continue;
+    const d = Math.abs(r.top + r.height / 2 - y);
+    if (d < bd) { bd = d; best = s; }
+  }
+  return best;
 }
 
 // air-tap: a quick pinch acts like a click at the cursor

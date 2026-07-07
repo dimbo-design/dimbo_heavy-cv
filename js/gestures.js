@@ -5,6 +5,7 @@
 // tracked size jitters ±35%):
 //   open-ish hand → pointing · pinch-act = grab → drag, axis-locked
 //   quick pinch = click · open-palm fling ⟷ = flip · open-palm brush ↓ = close
+//   lazy finger flick (tip strokes, palm parked) = scroll/sweep without pinching
 //   palm→fist clench = take (photo to full screen) · fist→palm = release it
 //   two hands moving apart/together = zoom (2D palm distance is rock solid)
 // All of it is ACTS (fast transitions vs a slow baseline), never postures.
@@ -34,6 +35,14 @@ export class Gestures extends EventTarget {
     this._samples = [];
     this._hasCursor = false;
     this.spreadEnabled = false;   // main enables it inside the lightbox only
+
+    this._relSamples = [];        // fingertip minus palm — the lazy-finger signal
+    this._relSpeed = 0;
+    this._flickHoldUntil = 0;
+    this._flickOppUntil = 0;
+    this._flickOppDir = '';
+    this._swipeOppUntil = 0;      // a sideways stroke's recoil may not answer back
+    this._swipeOppDir = '';
   }
 
   // grab held without movement — the deliberate "close" charge in main
@@ -90,6 +99,21 @@ export class Gestures extends EventTarget {
       this._emit('enter', {});
     }
 
+    // ---- fingertip motion RELATIVE to the palm — the lazy-finger signal.
+    // A parked hand with a working index finger shows up here and almost
+    // nowhere else. The rel-speed also guards pinch-engage below: a fingertip
+    // mid-sweep dips through the pinch thresholds on its way (Dmitry's traces
+    // show 0.24 at the bottom of a flick) and must not read as a grab.
+    const rel = { x: h.index.x - h.palm.x, y: h.index.y - h.palm.y };
+    if (this._relPrev) {
+      const rdt = Math.max(16, now - this._relPrevT) / 1000;
+      const rv = Math.hypot(rel.x - this._relPrev.x, rel.y - this._relPrev.y) / rdt;
+      this._relSpeed += (rv - this._relSpeed) * 0.5;
+    }
+    this._relPrev = rel; this._relPrevT = now;
+    this._relSamples.push({ rx: rel.x, ry: rel.y, o: h.open, t: now });
+    while (this._relSamples.length && now - this._relSamples[0].t > 420) this._relSamples.shift();
+
     // ---- grab: recognized as the ACT of pinching. A slow-moving baseline
     // remembers how far apart the fingers usually are; engaging requires the
     // distance to visibly DROP below it. A hand that arrives already-curled
@@ -97,7 +121,8 @@ export class Gestures extends EventTarget {
     this._pinchSlow += (h.pinch - this._pinchSlow) * 0.08;
     const wasGrabbing = this.grabbing;
     if (!this._pinched) {
-      const fingersOut = h.open > 0.85;      // a collapsing fist is not a pinch
+      // a collapsing fist is not a pinch; neither is a fingertip mid-flick
+      const fingersOut = h.open > 0.85 && this._relSpeed < 1.0;
       const closingAct = fingersOut && h.pinch < 0.28 && this._pinchSlow - h.pinch > 0.10;
       const hardAct = fingersOut && h.pinch < 0.22 && this._pinchSlow - h.pinch > 0.18;
       this._pinchIn = closingAct ? (this._pinchIn || 0) + 1 : 0;
@@ -198,6 +223,7 @@ export class Gestures extends EventTarget {
       }
     } else if (!this.grabbing && wasGrabbing) {
       this._swipeCooldownUntil = Math.max(this._swipeCooldownUntil, now + 650);
+      this._flickHoldUntil = Math.max(this._flickHoldUntil, now + 650);
       const quick = now - this._grabStartAt < 350 && this._grabMoved < 42;
       if (quick) {
         this._emit('tap', { x: this.cursor.x, y: this.cursor.y });
@@ -206,6 +232,47 @@ export class Gestures extends EventTarget {
         this._emit('grabend', this._velocity());
       }
       this._grabLive = false;
+    }
+
+    // ---- lazy finger flicks (Dmitry's recorded vocabulary): the fingertip
+    // strokes while the palm stays parked, so everything reads on index−palm.
+    // A vertical flick must EXTEND the finger (open rising) — the recoil that
+    // follows curls it back, and a hand relaxing after pointing collapses the
+    // same way; the extension gate rejects both (his traces: flick Δopen +0.4,
+    // recoil −0.5, relax −0.1). Horizontal sweeps are arm-driven and lean on
+    // an opposite-direction cooldown instead — the return stroke of a real
+    // sweep came back slower and under threshold every time he recorded it.
+    if (!this.grabbing && now > this._flickHoldUntil && this._relSamples.length > 3) {
+      const r0 = this._relSamples[0];
+      const rN = this._relSamples[this._relSamples.length - 1];
+      const drx = rN.rx - r0.rx, dry = rN.ry - r0.ry;
+      const rdt = Math.max(50, rN.t - r0.t) / 1000;
+      let axis = null, dir, vel;
+      if (Math.abs(dry) > 0.15 && Math.abs(dry) > Math.abs(drx) * 1.4 && rN.o - r0.o > 0.06) {
+        axis = 'y'; dir = dry > 0 ? 'down' : 'up';
+        vel = (Math.abs(dry) * window.innerHeight * this.gain) / rdt;
+      } else if (Math.abs(drx) > 0.17 && Math.abs(drx) > Math.abs(dry) * 1.4) {
+        axis = 'x'; dir = drx < 0 ? 'right' : 'left';   // frame x is mirrored
+        vel = (Math.abs(drx) * window.innerWidth * this.gain) / rdt;
+      }
+      // an opposite stroke soon after reads as the hand coming home — unless
+      // it's decisively fast (a real reversal cuts through the block)
+      const flickBlocked = dir === this._flickOppDir && now < this._flickOppUntil && vel < 1700;
+      if (axis && !flickBlocked) {
+        this._relSamples.length = 0;
+        this._samples.length = 0;          // the same stroke is not also a palm swipe
+        this._flickHoldUntil = now + 340;  // same direction may repeat quickly
+        this._flickOppDir = axis === 'y' ? (dir === 'down' ? 'up' : 'down')
+          : (dir === 'left' ? 'right' : 'left');
+        this._flickOppUntil = now + 1600;  // its recoil may not answer back
+        if (axis === 'x') {
+          this._swipeOppDir = this._flickOppDir;
+          this._swipeOppUntil = now + 1600;
+        }
+        this._swipeCooldownUntil = Math.max(this._swipeCooldownUntil, now + 800);
+        this._fistCooldownUntil = Math.max(this._fistCooldownUntil, now + 700);
+        this._emit('flick', { axis, dir, vel });
+      }
     }
 
     // ---- open-palm flings. "pure" = the hand was honestly open for the
@@ -219,17 +286,28 @@ export class Gestures extends EventTarget {
       const v = this._velocity();
       const pure = this._samples.every((s) => s.o > 1.05 && s.p > 0.45);
       if (Math.abs(dx) > window.innerWidth * 0.13 &&
-          Math.abs(dx) > Math.abs(dy) * 1.6 && Math.abs(v.vx) > 1000) {
+          Math.abs(dx) > Math.abs(dy) * 1.6 && Math.abs(v.vx) > 1000 &&
+          !((dx > 0 ? 'right' : 'left') === this._swipeOppDir &&
+            now < this._swipeOppUntil && Math.abs(v.vx) < 1700)) {
         this._swipeCooldownUntil = now + 800;
         this._fistCooldownUntil = Math.max(this._fistCooldownUntil, now + 700);
+        this._flickHoldUntil = Math.max(this._flickHoldUntil, now + 700);
+        // the recoil of this stroke may not fire back — through EITHER detector
+        this._swipeOppDir = dx > 0 ? 'left' : 'right';
+        this._swipeOppUntil = now + 1600;
+        this._flickOppDir = this._swipeOppDir;
+        this._flickOppUntil = now + 1600;
         this._samples.length = 0;
+        this._relSamples.length = 0;
         this._emit('swipe', { axis: 'x', dir: dx > 0 ? 'right' : 'left', vx: v.vx, pure });
       } else if (pure &&
           Math.abs(dy) > window.innerHeight * 0.18 &&
           Math.abs(dy) > Math.abs(dx) * 1.6 && Math.abs(v.vy) > 1250) {
         this._swipeCooldownUntil = now + 900;
         this._fistCooldownUntil = Math.max(this._fistCooldownUntil, now + 700);
+        this._flickHoldUntil = Math.max(this._flickHoldUntil, now + 700);
         this._samples.length = 0;
+        this._relSamples.length = 0;
         this._emit('swipe', { axis: 'y', dir: dy > 0 ? 'down' : 'up', vy: v.vy, pure: true });
       }
     }
@@ -244,6 +322,9 @@ export class Gestures extends EventTarget {
     this._grabLive = false;
     this._hasCursor = false;
     this._samples.length = 0;
+    this._relSamples.length = 0;
+    this._relPrev = null;
+    this._relSpeed = 0;
     this._emit('leave', {});
   }
 
