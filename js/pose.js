@@ -23,6 +23,9 @@ export class PoseEngine extends EventTarget {
 
   async init(video) {
     this.video = video;
+    this._canvas = document.createElement('canvas');
+    this._canvas.width = 256; this._canvas.height = 192;
+    this._ctx = this._canvas.getContext('2d', { willReadFrequently: false });
     try {
       const { FilesetResolver, PoseLandmarker } =
         await import(`${CDN}/vision_bundle.mjs`);
@@ -64,7 +67,8 @@ export class PoseEngine extends EventTarget {
     try {
       const ts = Math.max(this._lastTs + 1, performance.now());
       this._lastTs = ts;
-      const res = this.lm.detectForVideo(this.video, ts);
+      this._ctx.drawImage(this.video, 0, 0, 256, 192);
+      const res = this.lm.detectForVideo(this._canvas, ts);
       const lm = res?.landmarks?.[0];
       this._errors = 0;
       this._emit('pose', lm ? summarize(lm) : { vis: 0, head: null, shoulders: null });

@@ -22,6 +22,11 @@ export class HandsEngine extends EventTarget {
 
   async init(video) {
     this.video = video;
+    // full-res video is wasted on landmarks and stalls the main thread —
+    // a downscaled feed keeps the mirror fluid
+    this._canvas = document.createElement('canvas');
+    this._canvas.width = 384; this._canvas.height = 288;
+    this._ctx = this._canvas.getContext('2d', { willReadFrequently: false });
     try {
       const { FilesetResolver, HandLandmarker } =
         await import(`${CDN}/vision_bundle.mjs`);
@@ -64,7 +69,8 @@ export class HandsEngine extends EventTarget {
     try {
       const ts = Math.max(this._lastTs + 1, t);
       this._lastTs = ts;
-      const res = this.lm.detectForVideo(this.video, ts);
+      this._ctx.drawImage(this.video, 0, 0, 384, 288);
+      const res = this.lm.detectForVideo(this._canvas, ts);
       const hands = (res?.landmarks || []).map(summarize);
       this._errors = 0;
       this._emit('hands', { hands, t });

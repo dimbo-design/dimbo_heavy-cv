@@ -44,7 +44,7 @@ export class Gestures extends EventTarget {
   ingest({ hands }) {
     const now = performance.now();
     if (!hands.length) {
-      if (this.active && now - this._lastSeen > 350) this._dropHand();
+      if (this.active && now - this._lastSeen > 500) this._dropHand();
       return;
     }
     this._lastSeen = now;
@@ -58,10 +58,15 @@ export class Gestures extends EventTarget {
     // live grab is never interrupted by it.
     const h2 = sorted[1];
     const inField = (p) => p.palm.x > 0.05 && p.palm.x < 0.95 && p.palm.y > 0.05 && p.palm.y < 0.95;
-    const twoReal = this.spreadEnabled &&
+    // the edge/size gate guards the START only (against phantom hands);
+    // a running spread survives to the frame edges — that's where spreading
+    // hands naturally end up, and cutting it there killed the zoom mid-gesture
+    const startReal = this.spreadEnabled &&
       h2 && h2.size > 0.11 && h.size > 0.11 && inField(h) && inField(h2);
+    const contReal = this.spreadEnabled && h2 && this._spread;
+    const twoReal = this._spread ? contReal : startReal;
     this._twoFrames = twoReal ? (this._twoFrames || 0) + 1 : 0;
-    if (twoReal && this._twoFrames >= 4 && !this._grabLive && !this._pinched) {
+    if (twoReal && (this._spread || (this._twoFrames >= 4 && !this._grabLive && !this._pinched))) {
       const dist2 = Math.hypot(h.palm.x - h2.palm.x, h.palm.y - h2.palm.y);
       if (!this._spread) {
         this._spread = { d0: Math.max(dist2, 0.05) };

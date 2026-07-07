@@ -73,7 +73,7 @@ export const CONFIG = {
     depthIdle: 160,        // camera on, nobody in frame
     handsPresent: 33,      // gestures need low latency above all
     handsIdle: 140,
-    posePresent: 100,      // skeleton presence/head — smooth is enough
+    posePresent: 140,      // skeleton presence/head — smooth is enough
     poseIdle: 150,
   },
 
