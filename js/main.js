@@ -130,6 +130,7 @@ const app = {
   handsReady: false,
   handsFailed: false,
   glog: [],                 // last recognized gesture events (debug)
+  glogFull: [],             // whole-session log, copyable from the panel
   hoverDl: null,            // a[data-dl] under the hand cursor
   focusChangedAt: 0,
   device: null,
@@ -204,8 +205,15 @@ function boot() {
 
   for (const ev of ['enter', 'leave', 'grabstart', 'grabend', 'tap', 'swipe', 'pull', 'push']) {
     gestures.addEventListener(ev, (e) => {
-      app.glog.push(`${(performance.now() / 1000).toFixed(1)}s ${ev}${e.detail?.dir ? ' ' + e.detail.dir : ''}`);
+      const h = gestures.hand;
+      const line = `${(performance.now() / 1000).toFixed(1)}s ${ev}` +
+        `${e.detail?.dir ? ' ' + e.detail.dir : ''}` +
+        `${h ? `  pinch ${h.pinch.toFixed(2)} size ${h.size.toFixed(2)}` : ''}` +
+        `  [${app.lb ? 'lightbox' : app.spaceId ? 'chapter:' + app.spaceId : app.state}]`;
+      app.glog.push(line);
       if (app.glog.length > 6) app.glog.shift();
+      app.glogFull.push(line);
+      if (app.glogFull.length > 500) app.glogFull.shift();
     });
   }
 
@@ -237,6 +245,7 @@ function boot() {
     if (app.lb && e.key === 'ArrowRight') lightboxStep(1);
     if (app.lb && e.key === 'ArrowLeft') lightboxStep(-1);
     if (e.code === 'KeyD' && (e.altKey || e.ctrlKey)) $('debug').classList.toggle('hidden');
+    if (e.code === 'KeyC' && e.altKey) copyLog();
   });
   document.addEventListener('click', (e) => {
     if (app.lb) {
@@ -458,9 +467,17 @@ function onGrabMove({ dx, dy }) {
   if (d.kind === 'lb-pending') {
     d.accX += dx; d.accY += dy;
     if (Math.hypot(d.accX, d.accY) < 12) return;
-    d = app.drag = Math.abs(d.accX) > Math.abs(d.accY)
-      ? { kind: 'lightbox', acc: d.accX }
-      : { kind: 'lb-toss', acc: d.accY };
+    if (app.lb && app.lb.zoom > 1.05) {
+      d = app.drag = { kind: 'lb-pan' };
+    } else {
+      d = app.drag = Math.abs(d.accX) > Math.abs(d.accY)
+        ? { kind: 'lightbox', acc: d.accX }
+        : { kind: 'lb-toss', acc: d.accY };
+    }
+  }
+  if (d.kind === 'lb-pan') {
+    if (app.lb) { app.lb.panX += dx; app.lb.panY += dy; applyLbTransform(); }
+    return;
   }
   if (d.kind === 'lightbox') {
     d.acc += dx;
@@ -518,7 +535,7 @@ function onGrabEnd({ vx, vy }) {
 // main screen → open the focused node · chapter → lift a photo into the lightbox
 function onPull({ x, y }) {
   cancelDrag();
-  if (app.lb) return;                                  // already at the deepest layer
+  if (app.lb) { lbZoom(+0.6); return; }               // deeper into the photo
   if (app.spaceId) {
     const figs = currentStripItems();
     if (!figs.length) return;
@@ -538,8 +555,10 @@ function onPull({ x, y }) {
 // grab + push away: surface back up. lightbox → chapter → main screen
 function onPush() {
   cancelDrag();
-  if (app.lb) closeLightbox();
-  else if (app.spaceId) closeSpace();
+  if (app.lb) {
+    if (app.lb.zoom > 1.05) lbZoom(-0.8);             // zoom out first…
+    else closeLightbox();                             // …then leave the photo
+  } else if (app.spaceId) closeSpace();
 }
 
 function cancelDrag() {
@@ -565,7 +584,9 @@ function onSwipe({ dir, vx }) {
 
 // air-tap: a quick pinch acts like a click at the cursor
 function onAirTap({ x, y }) {
+  cancelDrag();
   if (app.lb) {
+    if (app.lb.zoom > 1.05) return;
     const r = $('lb-img').getBoundingClientRect();
     if (x < r.left || x > r.right || y < r.top || y > r.bottom) closeLightbox();
     else lightboxStep(x > r.left + r.width / 2 ? 1 : -1);
@@ -607,6 +628,7 @@ function openLightbox(fig) {
       el: f,
     })),
     idx,
+    zoom: 1, panX: 0, panY: 0,
   };
   renderLightbox();
   document.body.classList.add('lb-open');
@@ -634,12 +656,43 @@ function flipFrom(fig) {
 }
 
 // step past the last photo → the chapter takes you back (reversible exit)
+// flipping never closes: at the edges the photo springs — a clear "no more"
 function lightboxStep(delta) {
   if (!app.lb) return;
+  if (app.lb.zoom > 1.05) return;                  // zoomed in: dragging pans
   const next = app.lb.idx + delta;
-  if (next >= app.lb.items.length || next < 0) { closeLightbox(); return; }
+  if (next >= app.lb.items.length || next < 0) {
+    const img = $('lb-img');
+    img.classList.remove('lb-nudge-l', 'lb-nudge-r');
+    void img.offsetWidth;
+    img.classList.add(delta > 0 ? 'lb-nudge-r' : 'lb-nudge-l');
+    return;
+  }
   app.lb.idx = next;
+  app.lb.zoom = 1; app.lb.panX = 0; app.lb.panY = 0;
+  applyLbTransform();
   renderLightbox(delta);
+}
+
+// zoom via the depth axis: pull = closer, push = away (then out)
+function lbZoom(delta) {
+  const lb = app.lb;
+  lb.zoom = clamp(lb.zoom + delta, 1, 2.6);
+  if (lb.zoom <= 1.02) { lb.zoom = 1; lb.panX = 0; lb.panY = 0; }
+  applyLbTransform();
+}
+
+function applyLbTransform() {
+  const lb = app.lb;
+  if (!lb) return;
+  const img = $('lb-img');
+  const r = img.getBoundingClientRect();
+  const mx = (r.width / (lb.zoom || 1)) * (lb.zoom - 1) / 2;
+  const my = (r.height / (lb.zoom || 1)) * (lb.zoom - 1) / 2;
+  lb.panX = clamp(lb.panX, -mx, mx);
+  lb.panY = clamp(lb.panY, -my, my);
+  img.style.transform = lb.zoom > 1
+    ? `translate(${lb.panX}px, ${lb.panY}px) scale(${lb.zoom})` : '';
 }
 
 function renderLightbox(dir) {
@@ -672,6 +725,7 @@ function renderLightbox(dir) {
     img.src = items[idx].src;
     img.classList.add('lb-anim');
   }
+  if (app.lb.zoom <= 1) img.style.transform = '';
   $('lb-cap').textContent = items[idx].cap;
   $('lb-count').textContent = `${idx + 1} / ${items.length}`;
 }
@@ -1081,9 +1135,32 @@ function renderTelemetry() {
   $('telemetry').innerHTML = rows.map((r) => `<span>${r}</span>`).join('');
 }
 
+function copyLog() {
+  const s = app.signals, g = app.gestures;
+  const head = [
+    `# living-interface log · ${new Date().toISOString()}`,
+    `state ${app.state} space ${app.spaceId || '—'} lb ${!!app.lb}`,
+    `pinch ${g.hand?.pinch?.toFixed(2) ?? '—'} base ${g._pinchSlow?.toFixed(2) ?? '—'} size ${g.hand?.size?.toFixed(2) ?? '—'}`,
+    `score ${s?.score.toFixed(3)} frac ${s?.frac.toFixed(3)} device ${app.device}`,
+    '',
+  ];
+  navigator.clipboard?.writeText(head.concat(app.glogFull).join('\n')).then(() => {
+    const b = $('debug-copy');
+    if (b) { b.textContent = 'скопировано ✓'; setTimeout(() => { b.textContent = 'copy log (⌥C)'; }, 1500); }
+  });
+}
+
 function renderDebug() {
   const el = $('debug');
   if (el.classList.contains('hidden')) return;
+  if (!$('debug-copy')) {
+    const b = document.createElement('button');
+    b.id = 'debug-copy';
+    b.textContent = 'copy log (⌥C)';
+    b.addEventListener('click', copyLog);
+    el.after(b);
+  }
+  $('debug-copy').classList.toggle('hidden', el.classList.contains('hidden'));
   const s = app.signals, g = app.gestures;
   el.textContent = [
     `state    ${app.state}${app.spaceId ? ' · space:' + app.spaceId : ''}`,

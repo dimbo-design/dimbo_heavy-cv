@@ -415,6 +415,19 @@ body.lb-open #lightbox { opacity: 1; pointer-events: auto; }
 #lightbox img.lb-from-l { animation: lbl 0.55s var(--ease); }
 @keyframes lbr { from { opacity: 0; transform: translateX(110px) scale(0.97); } }
 @keyframes lbl { from { opacity: 0; transform: translateX(-110px) scale(0.97); } }
+#lightbox img.lb-nudge-r { animation: lbnr 0.4s var(--ease); }
+#lightbox img.lb-nudge-l { animation: lbnl 0.4s var(--ease); }
+@keyframes lbnr { 30% { transform: translateX(-30px); } }
+@keyframes lbnl { 30% { transform: translateX(30px); } }
+
+#debug-copy {
+  position: fixed; left: 34px; top: calc(80px + 300px); z-index: 90;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em;
+  color: var(--ink); background: rgba(10, 10, 13, 0.85);
+  border: 1px solid var(--line); padding: 8px 14px; cursor: pointer;
+}
+#debug-copy:hover { border-color: var(--ink-dim); }
+
 .lb-ghost {
   position: absolute; max-width: 86vw; max-height: 76vh;
   border-radius: 2px; pointer-events: none;

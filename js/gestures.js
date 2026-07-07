@@ -61,16 +61,20 @@ export class Gestures extends EventTarget {
     const wasGrabbing = this.grabbing;
     if (!this._pinched) {
       const closingAct = h.pinch < 0.28 && this._pinchSlow - h.pinch > 0.10;
+      const hardAct = h.pinch < 0.22 && this._pinchSlow - h.pinch > 0.18;
       this._pinchIn = closingAct ? (this._pinchIn || 0) + 1 : 0;
-      if (this._pinchIn >= 2) {
+      // a decisive snap engages instantly — quick "duck-quack" taps must land
+      if (hardAct || this._pinchIn >= 2) {
         this._pinched = true;
         this._pinchOut = 0;
         this._grabSize0 = h.size;
         this._zFired = false;
       }
     } else {
-      this._pinchOut = h.pinch > 0.42 ? (this._pinchOut || 0) + 1 : 0;
-      if (this._pinchOut >= 2) { this._pinched = false; this._pinchIn = 0; }
+      const opened = h.pinch > 0.42;
+      const wideOpen = h.pinch > 0.56;
+      this._pinchOut = opened ? (this._pinchOut || 0) + 1 : 0;
+      if (wideOpen || this._pinchOut >= 2) { this._pinched = false; this._pinchIn = 0; }
     }
     this.pinchStrength = clamp((0.55 - h.pinch) / 0.35, 0, 1);
     this.grabbing = this._pinched;
@@ -144,10 +148,12 @@ export class Gestures extends EventTarget {
         });
       }
     } else if (!this.grabbing && wasGrabbing) {
-      if (this._grabLive) {
-        this._emit('grabend', this._velocity());
-      } else if (now - this._grabStartAt < 260 && this._grabMoved < 30) {
+      const quick = now - this._grabStartAt < 350 && this._grabMoved < 42 && !this._zFired;
+      if (quick) {
         this._emit('tap', { x: this.cursor.x, y: this.cursor.y });
+        if (this._grabLive) this._emit('grabend', { vx: 0, vy: 0 });
+      } else if (this._grabLive) {
+        this._emit('grabend', this._velocity());
       }
       this._grabLive = false;
     }
