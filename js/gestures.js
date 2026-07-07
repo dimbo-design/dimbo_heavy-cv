@@ -242,16 +242,26 @@ export class Gestures extends EventTarget {
     // recoil −0.5, relax −0.1). Horizontal sweeps are arm-driven and lean on
     // an opposite-direction cooldown instead — the return stroke of a real
     // sweep came back slower and under threshold every time he recorded it.
-    if (!this.grabbing && now > this._flickHoldUntil && this._relSamples.length > 3) {
+    // A fist opening into a palm is ALSO a fingertip flying out with the hand
+    // opening — field log: it read as "flick up" and its cooldown silenced
+    // unclench entirely (the photo never let go). Hence the extra gates: a
+    // flick may not START from a fist (r0.o), may not open explosively wide
+    // (that's an unclench), and stays quiet while a second hand is in frame
+    // (zooming hands sweep — they must not flip photos).
+    if (!this.grabbing && now > this._flickHoldUntil && this._relSamples.length > 3 &&
+        !(h2 && h2.size > 0.08)) {
       const r0 = this._relSamples[0];
       const rN = this._relSamples[this._relSamples.length - 1];
       const drx = rN.rx - r0.rx, dry = rN.ry - r0.ry;
+      const dopen = rN.o - r0.o;
       const rdt = Math.max(50, rN.t - r0.t) / 1000;
       let axis = null, dir, vel;
-      if (Math.abs(dry) > 0.15 && Math.abs(dry) > Math.abs(drx) * 1.4 && rN.o - r0.o > 0.06) {
+      if (Math.abs(dry) > 0.15 && Math.abs(dry) > Math.abs(drx) * 1.4 &&
+          r0.o > 0.6 && dopen > 0.06 && dopen < 0.6) {
         axis = 'y'; dir = dry > 0 ? 'down' : 'up';
         vel = (Math.abs(dry) * window.innerHeight * this.gain) / rdt;
-      } else if (Math.abs(drx) > 0.17 && Math.abs(drx) > Math.abs(dry) * 1.4) {
+      } else if (Math.abs(drx) > 0.17 && Math.abs(drx) > Math.abs(dry) * 1.4 &&
+          r0.o > 0.55 && dopen < 0.6) {
         axis = 'x'; dir = drx < 0 ? 'right' : 'left';   // frame x is mirrored
         vel = (Math.abs(drx) * window.innerWidth * this.gain) / rdt;
       }
