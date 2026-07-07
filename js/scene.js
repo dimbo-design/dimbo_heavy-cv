@@ -14,6 +14,7 @@ const VERT = /* glsl */`
   uniform float uMix, uTime, uCoherence, uProgress, uAmp, uPx, uDpr;
   uniform vec2 uPlane;
   uniform vec3 uHand;          // x, y in group space · z = strength
+  uniform float uExhale;       // departure: the form breathes out and scatters
   varying float vD;
   varying float vGate;
   varying float vEdge;
@@ -36,6 +37,10 @@ const VERT = /* glsl */`
 
     vec3 p = mix(drift, formed, uCoherence);
     p.z += sin(uTime * 0.4 + aRand * 6.28318) * 0.07 * (1.0 - uCoherence);
+
+    // the exhale: a radial breath outward as the visitor's imprint lets go
+    p.xy *= 1.0 + uExhale * (0.14 + 0.12 * aRand);
+    p.z += uExhale * (aRand - 0.5) * 1.4;
 
     // the hand touches the fabric: particles rise toward it
     float hd = distance(p.xy, uHand.xy);
@@ -133,6 +138,7 @@ export class Field {
       uAccent:    { value: new THREE.Color(CONFIG.colors.accent) },
       uOpacity:   { value: 1 },
       uDim:       { value: 0 },
+      uExhale:    { value: 0 },
       uHand:      { value: new THREE.Vector3(0, 0, 0) },
     };
 
@@ -180,6 +186,8 @@ export class Field {
     // {x: fraction of half-width (−1..1), rotY, scale, dim}
     this.pose = null;
     this._poseX = 0; this._poseRotY = 0; this._poseScale = 1; this._poseDim = 0;
+
+    this._exhale = 0;
 
     // Hand touch target (group-local x, y + strength)
     this._handTarget = new THREE.Vector3();
@@ -286,6 +294,8 @@ export class Field {
   // pose: null (center stage) or {x, rotY, scale, dim}
   setPose(pose) { this.pose = pose; }
 
+  triggerExhale() { this._exhale = 1; }
+
   addStir(dx, dy) {
     this._stirVel += dx * 0.0035;
     this._stirXVel += dy * -0.004;
@@ -336,6 +346,11 @@ export class Field {
     this._poseScale += ((p ? p.scale : 1) - this._poseScale) * kp;
     this._poseDim += ((p ? p.dim || 0 : 0) - this._poseDim) * kp;
     u.uDim.value = this._poseDim;
+
+    // exhale decays on its own breath-length
+    this._exhale *= Math.exp(-dt * 0.75);
+    if (this._exhale < 0.003) this._exhale = 0;
+    u.uExhale.value = this._exhale;
 
     // hand touch eases toward its target
     const hv = u.uHand.value;

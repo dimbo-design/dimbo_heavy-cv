@@ -395,6 +395,7 @@ function enterPresent() {
 }
 
 function leavePresent() {
+  app.field.triggerExhale();                 // the imprint breathes out
   app.state = 'watching';
   app.nodesShown = false;
   app.field.setTargets({ coherence: CONFIG.coherence.watching });
@@ -664,9 +665,10 @@ function onSwipe({ axis, dir, vx, pure }) {
     if (dir === 'up') {
       app.scroll.target = clamp(app.scroll.target + window.innerHeight * 0.6, 0, app.scroll.max);
     } else if (app.scroll.y < 60) {
-      closeSpace();
+      closeSpace();                          // already home — the page leaves
     } else {
-      app.scroll.target = clamp(app.scroll.target - window.innerHeight * 0.6, 0, app.scroll.max);
+      app.scroll.target = 0;                 // one brush flies you home;
+      app.scroll.vel = 0;                    // the next one closes
     }
     return;
   }
