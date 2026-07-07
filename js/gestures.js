@@ -5,7 +5,9 @@
 // tracked size jitters ±35%):
 //   open-ish hand → pointing · pinch-act = grab → drag, axis-locked
 //   quick pinch = click · open-palm fling ⟷ = flip · open-palm brush ↓ = close
+//   palm→fist clench = take (photo to full screen) · fist→palm = release it
 //   two hands moving apart/together = zoom (2D palm distance is rock solid)
+// All of it is ACTS (fast transitions vs a slow baseline), never postures.
 
 export class Gestures extends EventTarget {
   constructor() {
@@ -27,6 +29,8 @@ export class Gestures extends EventTarget {
     this._lastSeen = 0;
     this._lastT = 0;
     this._swipeCooldownUntil = 0;
+    this._openSlow = 1;
+    this._fistCooldownUntil = 0;
     this._samples = [];
     this._hasCursor = false;
   }
@@ -49,7 +53,8 @@ export class Gestures extends EventTarget {
 
     // ---- two hands: the distance between palms is the zoom axis
     const h2 = sorted[1];
-    if (h2 && h2.size > 0.07 && h.size > 0.07) {
+    const inField = (p) => p.palm.x > 0.05 && p.palm.x < 0.95 && p.palm.y > 0.05 && p.palm.y < 0.95;
+    if (h2 && h2.size > 0.09 && h.size > 0.09 && inField(h) && inField(h2)) {
       const dist2 = Math.hypot(h.palm.x - h2.palm.x, h.palm.y - h2.palm.y);
       if (!this._spread) {
         this._spread = { d0: Math.max(dist2, 0.05) };
@@ -73,6 +78,7 @@ export class Gestures extends EventTarget {
     if (!this.active) {
       this.active = true;
       this._pinchSlow = h.pinch;
+      this._openSlow = h.open;
       this._emit('enter', {});
     }
 
@@ -83,15 +89,14 @@ export class Gestures extends EventTarget {
     this._pinchSlow += (h.pinch - this._pinchSlow) * 0.08;
     const wasGrabbing = this.grabbing;
     if (!this._pinched) {
-      const closingAct = h.pinch < 0.28 && this._pinchSlow - h.pinch > 0.10;
-      const hardAct = h.pinch < 0.22 && this._pinchSlow - h.pinch > 0.18;
+      const fingersOut = h.open > 0.85;      // a collapsing fist is not a pinch
+      const closingAct = fingersOut && h.pinch < 0.28 && this._pinchSlow - h.pinch > 0.10;
+      const hardAct = fingersOut && h.pinch < 0.22 && this._pinchSlow - h.pinch > 0.18;
       this._pinchIn = closingAct ? (this._pinchIn || 0) + 1 : 0;
       // a decisive snap engages instantly — quick "duck-quack" taps must land
       if (hardAct || this._pinchIn >= 2) {
         this._pinched = true;
         this._pinchOut = 0;
-        this._grabSize0 = h.size;
-        this._zFired = false;
       }
     } else {
       const opened = h.pinch > 0.42;
@@ -137,6 +142,23 @@ export class Gestures extends EventTarget {
     this._samples.push({ x: this.cursor.x, y: this.cursor.y, t: now });
     while (this._samples.length && now - this._samples[0].t > 300) this._samples.shift();
 
+    // ---- clench / unclench: fast palm↔fist transitions against the slow
+    // openness baseline. A relaxed hand floats mid-range and crosses neither.
+    this._openSlow += (h.open - this._openSlow) * 0.08;
+    if (!this._pinched && now > this._fistCooldownUntil) {
+      if (h.open < 0.72 && this._openSlow - h.open > 0.35) {
+        this._fistCooldownUntil = now + 700;
+        this._swipeCooldownUntil = Math.max(this._swipeCooldownUntil, now + 600);
+        this._openSlow = h.open;
+        this._emit('clench', { x: this.cursor.x, y: this.cursor.y });
+      } else if (h.open > 1.28 && h.open - this._openSlow > 0.35) {
+        this._fistCooldownUntil = now + 700;
+        this._swipeCooldownUntil = Math.max(this._swipeCooldownUntil, now + 600);
+        this._openSlow = h.open;
+        this._emit('unclench', { x: this.cursor.x, y: this.cursor.y });
+      }
+    }
+
     // ---- grab lifecycle with tap detection
     if (this.grabbing && !wasGrabbing) {
       this._grabStartAt = now;
@@ -156,7 +178,8 @@ export class Gestures extends EventTarget {
         });
       }
     } else if (!this.grabbing && wasGrabbing) {
-      const quick = now - this._grabStartAt < 350 && this._grabMoved < 42 && !this._zFired;
+      this._swipeCooldownUntil = Math.max(this._swipeCooldownUntil, now + 650);
+      const quick = now - this._grabStartAt < 350 && this._grabMoved < 42;
       if (quick) {
         this._emit('tap', { x: this.cursor.x, y: this.cursor.y });
         if (this._grabLive) this._emit('grabend', { vx: 0, vy: 0 });

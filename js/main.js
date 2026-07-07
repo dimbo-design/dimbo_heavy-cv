@@ -203,7 +203,7 @@ function boot() {
   hands.addEventListener('fatal', () => { app.handsFailed = true; });
   hands.addEventListener('hands', (e) => gestures.ingest(e.detail));
 
-  for (const ev of ['enter', 'leave', 'grabstart', 'grabend', 'tap', 'swipe', 'spreadstart', 'spreadend']) {
+  for (const ev of ['enter', 'leave', 'grabstart', 'grabend', 'tap', 'swipe', 'spreadstart', 'spreadend', 'clench', 'unclench']) {
     gestures.addEventListener(ev, (e) => {
       const h = gestures.hand;
       const line = `${(performance.now() / 1000).toFixed(1)}s ${ev}` +
@@ -231,7 +231,9 @@ function boot() {
   gestures.addEventListener('spreadstart', () => onSpreadStart());
   gestures.addEventListener('spreadmove', (e) => onSpreadMove(e.detail));
   gestures.addEventListener('spreadend', (e) => onSpreadEnd(e.detail));
-  for (const ev of ['enter', 'grabstart', 'tap', 'swipe', 'spreadstart'])
+  gestures.addEventListener('clench', (e) => onClench(e.detail));
+  gestures.addEventListener('unclench', () => onUnclench());
+  for (const ev of ['enter', 'grabstart', 'tap', 'swipe', 'spreadstart', 'clench', 'unclench'])
     gestures.addEventListener(ev, () => { app.lastActivity = performance.now(); });
 
   engine.initWorker();
@@ -533,17 +535,34 @@ function onSpreadMove({ scale }) {
 function onSpreadEnd({ scale }) {
   if (app.lb) return;                                  // zoom already applied live
   if (app.spaceId && scale > 1.35) {
-    const { x, y } = app.gestures.cursor;
-    const figs = currentStripItems();
-    let best = null, bd = Infinity;
-    for (const f of figs) {
-      const r = f.getBoundingClientRect();
-      if (r.width === 0) continue;
-      const d = Math.abs(r.left + r.width / 2 - x) + Math.abs(r.top + r.height / 2 - y) * 0.6;
-      if (d < bd) { bd = d; best = f; }
-    }
-    if (best) openLightbox(best);
+    const f = nearestFigure(app.gestures.cursor.x, app.gestures.cursor.y);
+    if (f) openLightbox(f);
   }
+}
+
+function nearestFigure(x, y) {
+  let best = null, bd = Infinity;
+  for (const f of currentStripItems()) {
+    const r = f.getBoundingClientRect();
+    if (r.width === 0) continue;
+    const d = Math.abs(r.left + r.width / 2 - x) + Math.abs(r.top + r.height / 2 - y) * 0.6;
+    if (d < bd) { bd = d; best = f; }
+  }
+  return best;
+}
+
+// palm clenched into a fist: take the photo — it fills the screen.
+// fist opened back into a palm: release it — the photo returns.
+function onClench({ x, y }) {
+  cancelDrag();
+  if (app.lb || !app.spaceId) return;
+  const f = nearestFigure(x, y);
+  if (f) openLightbox(f);
+}
+
+function onUnclench() {
+  cancelDrag();
+  if (app.lb) closeLightbox();
 }
 
 function cancelDrag() {
