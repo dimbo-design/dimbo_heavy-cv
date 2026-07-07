@@ -123,7 +123,7 @@ export class Gestures extends EventTarget {
     // landmarks jitter (field log: node selection went dead), and jitter sums
     // to nothing over a window while a real stroke covers honest distance.
     const rel = { x: h.index.x - h.palm.x, y: h.index.y - h.palm.y };
-    this._relSamples.push({ rx: rel.x, ry: rel.y, o: h.open, t: now });
+    this._relSamples.push({ rx: rel.x, ry: rel.y, px: h.palm.x, py: h.palm.y, o: h.open, t: now });
     while (this._relSamples.length && now - this._relSamples[0].t > 420) this._relSamples.shift();
     this._relDisp = 0;
     for (let i = this._relSamples.length - 1; i >= 0; i--) {
@@ -283,9 +283,13 @@ export class Gestures extends EventTarget {
       // a clutch, a return/wind-up is geometrically the opposite stroke, and
       // every "smart" disambiguator we stacked just suppressed input — which
       // reads as lag. So only the downward snap is a gesture; upward finger
-      // motion is a hand coming home and is not even a detection. Going back
-      // belongs to the clutch (pinch-drag) and the palm brush home.
-      if (dry > 0.15 && dry > Math.abs(drx) * 1.4 &&
+      // motion is a hand coming home and is not even a detection. The other
+      // direction lives in a DIFFERENT family (Dmitry's split): palm swipe
+      // up reads on, finger snap down steps back — each family is blind to
+      // the other's parasitic motions. Hence the palm-stillness gate here,
+      // his own definition verbatim: the finger works, the palm stands.
+      const palmDisp = Math.hypot(rN.px - r0.px, rN.py - r0.py);
+      if (dry > 0.15 && dry > Math.abs(drx) * 1.4 && palmDisp < 0.06 &&
           r0.o > 0.6 && dopen > 0.06 && dopen < 0.6) {
         axis = 'y'; dir = 'down';
         vel = (dry * window.innerHeight * this.gain) / rdt;

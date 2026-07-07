@@ -752,19 +752,20 @@ function onSwipe({ axis, dir, vx, pure }) {
   }
 }
 
-// lazy finger flicks. Vertical is one gesture with one meaning: the snap
-// downward = one step onward, always, instantly — like the wheel this hand
-// lives on. Upward finger motion is not a gesture at all (it's the hand
-// coming home), so nothing can ever fire backwards: going back belongs to
-// the pinch-drag and the palm brush home. Horizontal keeps both directions
+// lazy finger flicks. Vertical scrolling is Dmitry's split, two families
+// under one sheet metaphor: the open PALM sweeps the sheet up (read on,
+// lives in onSwipe), the parked-palm FINGER snaps the sheet down (one step
+// back, here). Each family is blind to the other's wind-ups and returns —
+// that's what makes two directions possible without a clutch. Upward finger
+// motion remains a non-gesture. Horizontal keeps both directions
 // (galleries need them) under the reading-direction momentum.
 function onFlick({ axis, dir, vel }) {
   let moved = false;
   if (axis === 'y') {
     if (!app.lb && app.spaceId) {
       const step = window.innerHeight * 0.52;
-      if (app.scroll.target >= app.scroll.max - 4) app.scroll.over = -70;
-      app.scroll.target = clamp(app.scroll.target + step, 0, app.scroll.max);
+      if (app.scroll.target <= 4) app.scroll.over = 70;   // nothing above
+      app.scroll.target = clamp(app.scroll.target - step, 0, app.scroll.max);
       app.scroll.vel = 0;
     }
     return;
