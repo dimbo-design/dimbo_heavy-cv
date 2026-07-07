@@ -266,7 +266,7 @@ export const NODES = [
 ];
 
 export const UI = {
-  mark:  { ru: 'тогулев', en: 'togulev' },
+  mark:  { ru: 'Dimbo', en: 'Dimbo' },
   title: { ru: 'Дмитрий Тогулев — живой интерфейс', en: 'Dmitry Togulev — living interface' },
 
   name:  { ru: 'Дмитрий Тогулев', en: 'Dmitry Togulev' },

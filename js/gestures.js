@@ -110,13 +110,16 @@ export class Gestures extends EventTarget {
     this._samples.push({ x: this.cursor.x, y: this.cursor.y, t: now });
     while (this._samples.length && now - this._samples[0].t > 300) this._samples.shift();
 
-    // ---- depth axis while grabbing: pull to you = dive, push away = surface
-    if (this._pinched && !this._zFired && this._grabSize0) {
+    // ---- depth axis while grabbing: pull to you = dive, push away = surface.
+    // Counts ONLY as a clean z-move: once the grab has travelled across the
+    // screen (a scroll or a drag), depth is off until the fingers reopen —
+    // otherwise scrolling would keep closing chapters by accident.
+    if (this._pinched && !this._zFired && this._grabSize0 && this._grabMoved < 48) {
       const ratio = h.size / this._grabSize0;
       if (ratio > 1.26) {
         this._zFired = true;
         this._emit('pull', { x: this.cursor.x, y: this.cursor.y });
-      } else if (ratio < 0.78) {
+      } else if (ratio < 0.76) {
         this._zFired = true;
         this._emit('push', { x: this.cursor.x, y: this.cursor.y });
       }
