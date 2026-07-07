@@ -278,8 +278,10 @@ export const UI = {
   invite: {
     h:  { ru: 'Этим интерфейсом управляет присутствие.',
           en: 'This interface is driven by presence.' },
-    hReturn: { ru: 'Интерфейс вас помнит.',
-               en: 'The interface remembers you.' },
+    // returning visitors get warmth, not surveillance — «помнит» читалось
+    // как слежка (полевой вердикт владельца)
+    hReturn: { ru: 'С возвращением.',
+               en: 'Welcome back.' },
     a:  { ru: 'позволить ему видеть', en: 'let it see' },
     s:  { ru: 'камера работает локально — изображение не покидает ваш компьютер',
           en: 'the camera runs locally — nothing ever leaves your machine' },
