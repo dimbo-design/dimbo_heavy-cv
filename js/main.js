@@ -141,7 +141,7 @@ const app = {
   lastDepth: null,
   hold: { p: 0, target: null, until: 0 },
   lbCooldownUntil: 0,
-  scroll: { y: 0, target: 0, vel: 0, max: 0 },
+  scroll: { y: 0, target: 0, vel: 0, max: 0, over: 0 },
   pageX: 0, pageXVel: 0,    // chapter grabbed/thrown sideways
   strips: [],
   drag: null,               // null | {kind:'strip'|'scroll'|'stir'|'lightbox', ...}
@@ -381,7 +381,7 @@ function openSpace(id) {
   app.hold.until = performance.now() + 1200;
 
   $('space-inner').innerHTML = renderPanel(node, lang);
-  app.scroll.y = 0; app.scroll.target = 0; app.scroll.vel = 0;
+  app.scroll.y = 0; app.scroll.target = 0; app.scroll.vel = 0; app.scroll.over = 0;
   app.pageX = 0; app.pageXVel = 0;
   $('space-inner').style.transform = 'translateY(0px)';
   collectStrips();
@@ -451,11 +451,22 @@ function onGrabMove({ dx, dy }) {
   let d = app.drag;
   if (!d) return;
   if (d.kind === 'chapter') {
-    const step = Math.abs(dy) < 1.5 ? 0 : clamp(dy, -70, 70);
+    // dominance weighting: the stronger component wins softly, so a vertical
+    // pull doesn't wiggle the strip and a strip drag doesn't rock the text
+    const tot = Math.abs(dx) + Math.abs(dy) + 1e-3;
+    const wy = clamp((Math.abs(dy) / tot) * 1.7, 0, 1);
+    const wx = clamp((Math.abs(dx) / tot) * 1.7, 0, 1);
+
+    const step = (Math.abs(dy) < 1.5 ? 0 : clamp(dy, -70, 70)) * wy;
     d.flt = (d.flt ?? 0) * 0.5 + step * 0.5;
-    app.scroll.target = clamp(app.scroll.target - d.flt, 0, app.scroll.max);
+    const raw = app.scroll.target - d.flt;
+    app.scroll.target = clamp(raw, 0, app.scroll.max);
+    // rubber band: pulling past an edge visibly carries the content with
+    // resistance — the page is in your hand even when there's no more of it
+    const beyond = raw < 0 ? raw : raw > app.scroll.max ? raw - app.scroll.max : 0;
+    if (beyond) app.scroll.over = clamp(app.scroll.over - beyond * 0.45, -110, 110);
     app.scroll.vel = 0;
-    if (d.strip) moveStrip(d.strip, dx);
+    if (d.strip && wx > 0.2) moveStrip(d.strip, dx * wx);
     return;
   }
   if (d.kind === 'lb-pending') {
@@ -1006,7 +1017,11 @@ function updateSpacePhysics(dt) {
     app.scroll.vel *= Math.exp(-dt * 3.2);
   }
   app.scroll.y += (app.scroll.target - app.scroll.y) * (1 - Math.exp(-dt * 9));
-  inner.style.transform = `translate(${app.pageX}px, ${-app.scroll.y}px)`;
+  if (!app.drag || app.drag.kind !== 'chapter') {
+    app.scroll.over *= Math.exp(-dt * 8);            // spring home
+    if (Math.abs(app.scroll.over) < 0.4) app.scroll.over = 0;
+  }
+  inner.style.transform = `translate(${app.pageX}px, ${-app.scroll.y + app.scroll.over}px)`;
 
   for (const s of app.strips) {
     const { min, max } = stripBounds(s);
