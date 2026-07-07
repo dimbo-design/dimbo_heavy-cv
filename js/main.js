@@ -761,6 +761,10 @@ function cancelDrag() {
 
 // open-palm fling ⟷ flips; open-palm brush ↓ closes the current layer
 function onSwipe({ axis, dir, vx, pure }) {
+  // the zoomed photo is its own state (Dmitry's model): two hands rule the
+  // scale, the fist or pinch carries the frame, the open palm resets —
+  // flipping photos while zoomed-in is never what the moving hands mean
+  if (app.lb && app.lb.zoom > 1.05) return;
   if (axis === 'y') {
     if (app.lb) { if (dir === 'down') closeLightbox(); return; }
     if (!app.spaceId) return;
@@ -808,6 +812,7 @@ function onFlick({ axis, dir, vel }) {
     return;
   }
   if (app.lb) {
+    if (app.lb.zoom > 1.05) return;     // zoomed: the frame is held, not flipped
     lightboxStep(dir === 'left' ? 1 : -1);
     app.gestures.noteFlickEffect('x', true);
     return;
