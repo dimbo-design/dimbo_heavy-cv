@@ -238,6 +238,15 @@ function boot() {
     field.setTargets({ progress: 1 });
   });
   engine.addEventListener('fatal', () => enterFailed());
+  setInterval(() => {
+    const sh = signals.shoulders;
+    if (sh && signals.present) {
+      // leaned back = smaller shoulders = slower, deeper breath of the form
+      const relax = 1 - clamp((sh.width - 0.16) / 0.18, 0, 1);
+      field.setPosture(relax);
+    }
+  }, 500);
+
   engine.addEventListener('depth', (e) => {
     const { data, width, height, stats } = e.detail;
     field.setDepth(data, width, height, engine.inferMs);
@@ -308,6 +317,8 @@ function boot() {
       show('asleep');
     }
   })();
+
+  $('space-close').addEventListener('click', () => closeSpace());
 
   $('asleep-action').addEventListener('click', () => {
     hide('asleep');
@@ -662,13 +673,16 @@ function onSwipe({ axis, dir, vx, pure }) {
     if (!app.spaceId) return;
     // everyone's first instinct: waving the palm vertically to scroll.
     // It scrolls. Waving down when already at the top throws the page away.
+    // swipes only ever scroll — closing lives on the explicit target
+    // (the industry learned this the hard way: swipe recoil reads as the
+    // opposite swipe, and Dmitry's log looped exactly that way)
     if (dir === 'up') {
       app.scroll.target = clamp(app.scroll.target + window.innerHeight * 0.6, 0, app.scroll.max);
     } else if (app.scroll.y < 60) {
-      closeSpace();                          // already home — the page leaves
+      app.scroll.over = 70;                  // a spring: nothing above
     } else {
-      app.scroll.target = 0;                 // one brush flies you home;
-      app.scroll.vel = 0;                    // the next one closes
+      app.scroll.target = 0;
+      app.scroll.vel = 0;
     }
     return;
   }
@@ -698,6 +712,7 @@ function onAirTap({ x, y }) {
   }
   if (app.spaceId) {
     const el = document.elementFromPoint(x, y);
+    if (el?.closest('#space-close')) { closeSpace(); return; }
     const fig = el?.closest('#space-inner figure');
     if (fig) { openLightbox(fig); return; }
     const link = el?.closest('#space-inner a');
@@ -1041,7 +1056,8 @@ function updateHold(dt, now) {
   const target =
     app.state !== 'present' ? null
     : !app.spaceId && app.focusedId && app.pointer ? 'node:' + app.focusedId
-    : app.spaceId && app.hoverDl ? 'dl' : null;
+    : app.spaceId && app.hoverDl ? 'dl'
+    : app.spaceId && app.hoverClose ? 'close' : null;
 
   if (handCalm && target) {
     if (app.hold.target !== target) { app.hold.target = target; app.hold.p = 0; }
@@ -1054,6 +1070,8 @@ function updateHold(dt, now) {
         a.click();
         a.classList.add('dl-got');
         setTimeout(() => a.classList.remove('dl-got'), 1600);
+      } else if (target === 'close') {
+        closeSpace();
       } else {
         openSpace(target.slice(5));
       }
@@ -1069,6 +1087,11 @@ function updateHold(dt, now) {
 // the dwell indicator lives on the node itself: silent for the first 40%
 // of the hold, then a line under the label fills over the remaining 60%
 function renderHoldBar() {
+  const closeFill = document.querySelector('#space-close .n-fill');
+  if (closeFill) {
+    const pct = app.hold.target === 'close' ? clamp((app.hold.p - 0.4) / 0.6, 0, 1) : 0;
+    closeFill.style.transform = `scaleX(${pct})`;
+  }
   const active = app.hold.target?.startsWith('node:') ? app.hold.target.slice(5) : null;
   for (const el of document.querySelectorAll('.node')) {
     const fill = el.querySelector('.n-fill');
@@ -1087,15 +1110,17 @@ function updateCursor() {
   if (!wanted) { app.hoverDl = null; return; }
   el.style.transform = `translate3d(${g.cursor.x}px, ${g.cursor.y}px, 0)`;
 
-  // the one gesture-enabled link: the pdf résumé
+  // dwell targets inside a chapter: the pdf résumé and the close control
   if (app.spaceId && !app.lb) {
     const under = document.elementFromPoint(g.cursor.x, g.cursor.y);
     app.hoverDl = under?.closest('#space-inner a[data-dl]') || null;
+    app.hoverClose = under?.closest('#space-close') || null;
   } else {
     app.hoverDl = null;
+    app.hoverClose = null;
   }
 
-  const over = app.hoverDl ? ' on-target' : '';
+  const over = app.hoverDl || app.hoverClose ? ' on-target' : '';
   el.className = (g.mode === 'grab' ? 'm-grab' : g.mode === 'palm' ? 'm-palm'
     : g.mode === 'point' ? 'm-point' : '') + over;
   const C = 119.4;
@@ -1254,6 +1279,7 @@ function renderStatic() {
   setText('denied-s', UI.denied.s[lang]);
   setText('denied-action', UI.denied.a[lang]);
 
+  setText('space-close-t', UI.close[lang]);
   setText('asleep-h', UI.asleep.h[lang]);
   setText('asleep-s', UI.asleep.s[lang]);
   setText('asleep-action', UI.asleep.a[lang]);

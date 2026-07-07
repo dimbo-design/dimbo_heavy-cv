@@ -314,6 +314,8 @@ export const UI = {
           en: 'The experience needs a webcam and a large screen. Open it on a desktop — the interface will notice you on its own.' },
   },
 
+  close: { ru: 'закрыть', en: 'close' },
+
   telemetry: {
     eyeOff:  { ru: 'глаз · спит',    en: 'eye · asleep' },
     eyeOn:   { ru: 'глаз · открыт',  en: 'eye · open' },

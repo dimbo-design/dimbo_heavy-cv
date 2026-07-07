@@ -93,6 +93,8 @@ const FRAG = /* glsl */`
   }
 `;
 
+function clamp01(v) { return Math.min(1, Math.max(0, v)); }
+
 function makeDepthTexture(w, h) {
   const tex = new THREE.DataTexture(new Uint8Array(w * h), w, h,
     THREE.RedFormat, THREE.UnsignedByteType);
@@ -188,6 +190,7 @@ export class Field {
     this._poseX = 0; this._poseRotY = 0; this._poseScale = 1; this._poseDim = 0;
 
     this._exhale = 0;
+    this._relax = 0; this._relaxT = 0;
 
     // Hand touch target (group-local x, y + strength)
     this._handTarget = new THREE.Vector3();
@@ -296,6 +299,10 @@ export class Field {
 
   triggerExhale() { this._exhale = 1; }
 
+  // posture: 0 = close/upright, 1 = leaned back — the form breathes
+  // slower and a touch deeper for a reading visitor. Never more than that.
+  setPosture(relax) { this._relaxT = clamp01(relax); }
+
   addStir(dx, dy) {
     this._stirVel += dx * 0.0035;
     this._stirXVel += dy * -0.004;
@@ -346,6 +353,12 @@ export class Field {
     this._poseScale += ((p ? p.scale : 1) - this._poseScale) * kp;
     this._poseDim += ((p ? p.dim || 0 : 0) - this._poseDim) * kp;
     u.uDim.value = this._poseDim;
+
+    // posture breath: ±2–5% of depth amplitude, slower when leaned back
+    this._relax += (this._relaxT - this._relax) * (1 - Math.exp(-dt * 0.8));
+    u.uAmp.value = CONFIG.depthAmp *
+      (1 + (0.018 + 0.032 * this._relax) *
+        Math.sin(u.uTime.value * (1.1 - 0.55 * this._relax)));
 
     // exhale decays on its own breath-length
     this._exhale *= Math.exp(-dt * 0.75);
