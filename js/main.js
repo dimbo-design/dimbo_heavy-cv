@@ -488,15 +488,13 @@ function openSpace(id) {
   app.hold.p = 0;
   app.hold.until = performance.now() + 1200;
 
-  $('space-inner').innerHTML = renderPanel(node, lang);
+  document.body.classList.toggle('space-right', (node.pose?.x ?? 1) < 0);
+  renderSpaceContent(node);
   app.scroll.y = 0; app.scroll.target = 0; app.scroll.vel = 0; app.scroll.over = 0;
   app.pageX = 0; app.pageXVel = 0;
   $('space-inner').style.transform = 'translateY(0px)';
-  collectStrips();
 
   document.body.classList.add('space-open');
-  document.body.classList.toggle('space-right', (node.pose?.x ?? 1) < 0);
-  requestAnimationFrame(() => requestAnimationFrame(positionCloseCross));
   app.field.setPose(node.pose || { x: 0.46, rotY: -0.5, scale: 0.9, dim: 0 });
   applyCadence();
 }
@@ -506,16 +504,34 @@ function openSpace(id) {
 // Y rides the title's first line; X lives in the stylesheet — outside the
 // column width (anchoring X to the line's text end put the cross inside
 // short headings)
+// The cross is re-parented into the scrolling sheet on every render:
+// innerHTML wipes children, so it steps out, waits, and steps back in.
+function renderSpaceContent(node) {
+  const inner = $('space-inner');
+  const sc = $('space-close');
+  $('space').appendChild(sc);                 // step out before the wipe
+  inner.innerHTML = renderPanel(node, lang);
+  inner.appendChild(sc);                      // ride the sheet
+  collectStrips();
+  requestAnimationFrame(() => requestAnimationFrame(positionCloseCross));
+}
+
+// Y — the title's first-line axis; X — beyond the column width, both
+// measured relative to the sheet the cross now lives in
 function positionCloseCross() {
   const sc = $('space-close');
   const h2 = document.querySelector('#space-inner h2');
   if (!sc || !h2 || !app.spaceId) return;
   const fs = parseFloat(getComputedStyle(h2).fontSize);
   const lineH = parseFloat(getComputedStyle(h2).lineHeight) || fs * 1.08;
-  sc.style.setProperty('--cross', `${Math.round(fs * 0.82)}px`);
-  sc.style.top = `${h2.offsetTop + (lineH - fs * 0.82) / 2}px`;
-  sc.style.left = '';
-  sc.style.right = '';
+  const cross = Math.round(fs * 0.82);
+  sc.style.setProperty('--cross', `${cross}px`);
+  sc.style.top = `${h2.offsetTop + (lineH - cross) / 2}px`;
+  if (document.body.classList.contains('space-right')) {
+    sc.style.left = `${h2.offsetLeft - 42 - cross}px`;
+  } else {
+    sc.style.left = `${h2.offsetLeft + h2.offsetWidth + 42}px`;
+  }
 }
 
 function closeSpace() {
@@ -1373,10 +1389,7 @@ function setLang(l) {
   renderStatic();
   localizeNodes();
   if (app.spaceId) {
-    const node = NODES.find((n) => n.id === app.spaceId);
-    $('space-inner').innerHTML = renderPanel(node, lang);
-    collectStrips();
-    requestAnimationFrame(() => requestAnimationFrame(positionCloseCross));
+    renderSpaceContent(NODES.find((n) => n.id === app.spaceId));
   }
 }
 
