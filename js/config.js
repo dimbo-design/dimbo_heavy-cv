@@ -43,7 +43,7 @@ export const CONFIG = {
     proxMax: 0.42,
 
     // skeleton presence (Pose Landmarker); depth heuristics are the fallback
-    poseEnter: 0.60, poseExit: 0.42,   // chairs impersonate people at low vis
+    poseEnter: 0.55, poseExit: 0.30,
     poseEnterMs: 400, poseExitMs: 2200,
 
     leanDelta: 0.105,     // proximity rise over baseline that opens a panel

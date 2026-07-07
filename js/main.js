@@ -180,6 +180,7 @@ const app = {
   poseFailed: false,
   glog: [],                 // last recognized gesture events (debug)
   glogFull: [],             // whole-session log, copyable from the panel
+  rec: null,                // raw hand trace (⌥R): fuel for the finger workshop
   hoverDl: null,            // a[data-dl] under the hand cursor
   focusChangedAt: 0,
   device: null,
@@ -267,7 +268,14 @@ function boot() {
   // -- hand pipeline
   hands.addEventListener('ready', () => { app.handsReady = true; });
   hands.addEventListener('fatal', () => { app.handsFailed = true; });
-  hands.addEventListener('hands', (e) => gestures.ingest(e.detail));
+  hands.addEventListener('hands', (e) => {
+    gestures.ingest(e.detail);
+    const h = e.detail.hands[0];
+    if (app.rec && h) {
+      app.rec.push(`${(performance.now() / 1000).toFixed(2)} ${h.pinch.toFixed(2)} ${h.open.toFixed(2)} ${h.size.toFixed(3)} ${h.palm.x.toFixed(3)} ${h.palm.y.toFixed(3)} ${h.index.x.toFixed(3)} ${h.index.y.toFixed(3)}`);
+      if (app.rec.length > 1400) app.rec.shift();
+    }
+  });
 
   for (const ev of ['enter', 'leave', 'grabstart', 'grabend', 'tap', 'swipe', 'spreadstart', 'spreadend', 'clench', 'unclench']) {
     gestures.addEventListener(ev, (e) => {
@@ -338,6 +346,7 @@ function boot() {
     if (app.lb && e.key === 'ArrowLeft') lightboxStep(-1);
     if (e.code === 'KeyD' && (e.altKey || e.ctrlKey)) cycleDebug();
     if (e.code === 'KeyC' && e.altKey) copyLog();
+    if (e.code === 'KeyR' && e.altKey) toggleRec();
   });
   document.addEventListener('click', (e) => {
     if (app.lb) {
@@ -1110,11 +1119,16 @@ function updateCursor() {
   if (!wanted) { app.hoverDl = null; return; }
   el.style.transform = `translate3d(${g.cursor.x}px, ${g.cursor.y}px, 0)`;
 
-  // dwell targets inside a chapter: the pdf résumé and the close control
+  // dwell targets inside a chapter: the pdf résumé and the close control.
+  // the close target is MAGNETIC — a dwell target must be reachable, not
+  // pixel-perfect (the node-anchor lesson, learned twice now)
   if (app.spaceId && !app.lb) {
     const under = document.elementFromPoint(g.cursor.x, g.cursor.y);
     app.hoverDl = under?.closest('#space-inner a[data-dl]') || null;
-    app.hoverClose = under?.closest('#space-close') || null;
+    const sc = $('space-close');
+    const r = sc.getBoundingClientRect();
+    const d = Math.hypot(g.cursor.x - (r.left + r.width / 2), g.cursor.y - (r.top + r.height / 2));
+    app.hoverClose = d < Math.max(85, r.width * 0.8) ? sc : null;
   } else {
     app.hoverDl = null;
     app.hoverClose = null;
@@ -1350,6 +1364,12 @@ function cycleDebug() {
   }
 }
 
+function toggleRec() {
+  app.rec = app.rec ? null : [];
+  const b = $('debug-rec');
+  if (b) b.textContent = app.rec ? 'rec ● пишет' : 'rec (⌥R)';
+}
+
 function copyLog() {
   const s = app.signals, g = app.gestures;
   const head = [
@@ -1359,7 +1379,10 @@ function copyLog() {
     `score ${s?.score.toFixed(3)} frac ${s?.frac.toFixed(3)} device ${app.device}`,
     '',
   ];
-  navigator.clipboard?.writeText(head.concat(app.glogFull).join('\n')).then(() => {
+  const trace = app.rec && app.rec.length
+    ? ['', '--- trace: t pinch open size palmX palmY indexX indexY', ...app.rec]
+    : [];
+  navigator.clipboard?.writeText(head.concat(app.glogFull, trace).join('\n')).then(() => {
     const b = $('debug-copy');
     if (b) { b.textContent = 'скопировано ✓'; setTimeout(() => { b.textContent = 'copy log (⌥C)'; }, 1500); }
   });
@@ -1379,7 +1402,11 @@ function renderDebug() {
     b.id = 'debug-copy';
     b.textContent = 'copy log (⌥C)';
     b.addEventListener('click', copyLog);
-    tools.append(mode, b);
+    const rec = document.createElement('button');
+    rec.id = 'debug-rec';
+    rec.textContent = 'rec (⌥R)';
+    rec.addEventListener('click', toggleRec);
+    tools.append(mode, b, rec);
     el.before(tools);
     // the copy button deliberately outlives the panel — the log is most
     // wanted right after you've hidden the numbers

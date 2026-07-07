@@ -372,7 +372,8 @@ body.space-open .blk {
 
 /* the close target: same dwell language the visitor learned on the nodes */
 #space-close {
-  position: absolute; top: 8.5vh; left: 7.5vw; z-index: 5;
+  position: absolute; top: 8.5vh; z-index: 5;
+  left: calc(7.5vw + min(23vw, 320px)); transform: translateX(-50%);
   display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
   font-family: var(--mono); font-size: 12px; letter-spacing: 0.18em;
   color: var(--ink-dim);
@@ -381,7 +382,10 @@ body.space-open .blk {
   text-shadow: 0 0 10px rgba(10, 10, 13, 0.9);
 }
 body.space-open #space-close { opacity: 1; pointer-events: auto; }
-body.space-right #space-close { left: auto; right: 7.5vw; align-items: flex-end; }
+body.space-right #space-close {
+  left: auto; right: calc(7.5vw + min(23vw, 320px));
+  transform: translateX(50%); align-items: flex-end;
+}
 #space-close:hover { color: var(--ink); }
 #space-close .n-bar { width: 100%; }
 
