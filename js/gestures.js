@@ -107,6 +107,10 @@ export class Gestures extends EventTarget {
       this.active = true;
       this._pinchSlow = h.pinch;
       this._openSlow = h.open;
+      // a re-acquired hand arrives mid-motion with empty baselines — field
+      // log showed instant 0.3s phantom grabs right after enter; let the
+      // baselines breathe before a pinch may engage
+      this._pinchBlockUntil = Math.max(this._pinchBlockUntil, now + 280);
       this._emit('enter', {});
     }
 
@@ -294,7 +298,9 @@ export class Gestures extends EventTarget {
           this._relSamples.length = 0;
           this._samples.length = 0;        // the same stroke is not also a palm swipe
           this._flickHoldUntil = now + 340; // same direction may repeat quickly
-          this._mom[axis] = { dir, vel, until: now + 2600 };
+          // ↕ reading rhythm is slow (wind-up → settle → stroke, 2-3s between
+          // real strokes in the field) — the direction must outlive a pause
+          this._mom[axis] = { dir, vel, until: now + (axis === 'y' ? 4000 : 2600) };
           this._swipeCooldownUntil = Math.max(this._swipeCooldownUntil, now + 800);
           this._fistCooldownUntil = Math.max(this._fistCooldownUntil, now + 700);
           this._pinchBlockUntil = now + 450;
@@ -334,6 +340,11 @@ export class Gestures extends EventTarget {
         this._flickHoldUntil = Math.max(this._flickHoldUntil, now + 700);
         this._samples.length = 0;
         this._relSamples.length = 0;
+        // palm swipes carry the reading direction too — Dmitry reads onward
+        // with palm strokes, and the wind-up dip of the NEXT stroke must know
+        // it. A downward brush means "home": the page starts over, no bias.
+        this._mom.y = dy > 0 ? null
+          : { dir: 'up', vel: Math.abs(v.vy), until: now + 4000 };
         this._emit('swipe', { axis: 'y', dir: dy > 0 ? 'down' : 'up', vy: v.vy, pure: true });
       }
     }
