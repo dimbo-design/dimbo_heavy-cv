@@ -253,7 +253,7 @@ function boot() {
     if (e.key === 'Escape') { if (app.lb) closeLightbox(); else closeSpace(); }
     if (app.lb && e.key === 'ArrowRight') lightboxStep(1);
     if (app.lb && e.key === 'ArrowLeft') lightboxStep(-1);
-    if (e.code === 'KeyD' && (e.altKey || e.ctrlKey)) $('debug').classList.toggle('hidden');
+    if (e.code === 'KeyD' && (e.altKey || e.ctrlKey)) cycleDebug();
     if (e.code === 'KeyC' && e.altKey) copyLog();
   });
   document.addEventListener('click', (e) => {
@@ -1170,6 +1170,19 @@ function renderTelemetry() {
   $('telemetry').innerHTML = rows.map((r) => `<span>${r}</span>`).join('');
 }
 
+// debug panel modes: hidden → full → mini → hidden
+function cycleDebug() {
+  const el = $('debug');
+  if (el.classList.contains('hidden')) {
+    el.classList.remove('hidden', 'mini');
+  } else if (!el.classList.contains('mini')) {
+    el.classList.add('mini');
+  } else {
+    el.classList.add('hidden');
+    el.classList.remove('mini');
+  }
+}
+
 function copyLog() {
   const s = app.signals, g = app.gestures;
   const head = [
@@ -1189,14 +1202,29 @@ function renderDebug() {
   const el = $('debug');
   if (el.classList.contains('hidden')) return;
   if (!$('debug-copy')) {
+    const tools = document.createElement('div');
+    tools.id = 'debug-tools';
+    const mode = document.createElement('button');
+    mode.id = 'debug-mode';
+    mode.textContent = 'вид';
+    mode.addEventListener('click', cycleDebug);
     const b = document.createElement('button');
     b.id = 'debug-copy';
     b.textContent = 'copy log (⌥C)';
     b.addEventListener('click', copyLog);
-    el.after(b);
+    tools.append(mode, b);
+    el.before(tools);
+    // the copy button deliberately outlives the panel — the log is most
+    // wanted right after you've hidden the numbers
   }
-  $('debug-copy').classList.toggle('hidden', el.classList.contains('hidden'));
   const s = app.signals, g = app.gestures;
+  if (el.classList.contains('mini')) {
+    el.textContent = [
+      `${app.state}${app.spaceId ? '·' + app.spaceId : ''}${app.lb ? '·lb' : ''}  pinch ${g.hand?.pinch?.toFixed(2) ?? '—'}`,
+      app.glog.slice(-2).join('\n') || '—',
+    ].join('\n');
+    return;
+  }
   el.textContent = [
     `state    ${app.state}${app.spaceId ? ' · space:' + app.spaceId : ''}`,
     `score    ${s.score.toFixed(3)}  frac ${s.frac.toFixed(3)}`,
