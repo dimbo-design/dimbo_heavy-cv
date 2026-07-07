@@ -370,33 +370,47 @@ body.space-open .blk {
   color: var(--ink-faint); margin-top: 10px; max-width: 40ch; line-height: 1.6;
 }
 
-/* the close target — same species as the nodes: label, bar, sub, halo */
+/* the close cross: capital-letter-sized ×, inward of the column beside
+   the title (within the hand's reach); label + fill bar bloom on focus */
 #space-close {
-  position: absolute; top: 8.5vh; z-index: 5;
-  left: calc(7.5vw + min(23vw, 320px)); transform: translateX(-50%);
-  display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+  position: absolute; z-index: 5;
+  top: calc(15vh + 22px);
+  left: calc(7.5vw + min(46vw, 640px) + 48px);
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
   opacity: 0; pointer-events: none;
   transition: opacity 0.7s var(--ease) 0.4s;
+  cursor: pointer;
 }
 #space-close::before {
-  content: ''; position: absolute; inset: -16px -26px; z-index: -1;
-  background: radial-gradient(ellipse at 30% 50%, rgba(10, 10, 13, 0.8), transparent 72%);
+  content: ''; position: absolute; inset: -22px -30px; z-index: -1;
+  background: radial-gradient(ellipse, rgba(10, 10, 13, 0.75), transparent 72%);
   filter: blur(4px);
 }
-body.space-open #space-close { opacity: 0.72; pointer-events: auto; }
+body.space-open #space-close { opacity: 0.6; pointer-events: auto; }
 body.space-open #space-close:hover,
 body.space-open #space-close.focus { opacity: 1; }
-#space-close .n-label { cursor: pointer; }
-#space-close.focus .n-label {
-  color: #fff; transform: scale(1.12);
-  text-shadow: 0 0 14px rgba(10, 10, 13, 1), 0 0 30px rgba(232, 228, 218, 0.25);
-}
-#space-close.focus .n-bar { opacity: 1; }
-#space-close.focus .n-sub { opacity: 1; transform: none; }
 body.space-right #space-close {
-  left: auto; right: calc(7.5vw + min(23vw, 320px));
-  transform: translateX(50%); align-items: flex-end;
+  left: auto; right: calc(7.5vw + min(46vw, 640px) + 48px);
 }
+#space-close svg {
+  width: clamp(30px, 2.9vw, 46px); height: clamp(30px, 2.9vw, 46px);
+  overflow: visible;
+  transition: transform 0.45s var(--ease);
+}
+#space-close svg line {
+  stroke: var(--ink); stroke-width: 2.4; stroke-linecap: round;
+}
+#space-close:hover svg, #space-close.focus svg { transform: scale(1.1) rotate(90deg); }
+#space-close .n-label {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.18em;
+  color: var(--ink-dim);
+  opacity: 0; transform: translateY(-3px);
+  transition: opacity 0.4s var(--ease), transform 0.4s var(--ease);
+  text-shadow: 0 0 10px rgba(10, 10, 13, 0.9);
+}
+#space-close .n-bar { width: 100%; }
+#space-close:hover .n-label, #space-close.focus .n-label { opacity: 1; transform: none; }
+#space-close.focus .n-bar { opacity: 1; }
 
 /* thin position hint: flares up the moment the text is gripped */
 #scroll-hint {

@@ -38,7 +38,6 @@ if (new URLSearchParams(location.search).has('fresh')) {
 // first success — the object teaches, nothing overlays
 const learned = {
   open: !!localStorage.getItem('gl_open'),
-  close: !!localStorage.getItem('gl_close'),
 };
 const returning = !!localStorage.getItem('visited') &&
   !new URLSearchParams(location.search).has('fresh');
@@ -993,7 +992,10 @@ function reflectionPointer() {
   const g = app.gestures;
   const h = g.hand;
   if (!h) return null;
-  const tip = h.pointing ? h.index : g.grabbing ? h.pinchPoint : h.palm;
+  const tip = g.grabbing ? h.pinchPoint : {
+    x: h.index.x * 0.55 + h.palm.x * 0.45,
+    y: h.index.y * 0.55 + h.palm.y * 0.45,
+  };
   let z = 1.2;
   const ld = app.lastDepth;
   if (ld) {
@@ -1094,7 +1096,6 @@ function updateHold(dt, now) {
         a.classList.add('dl-got');
         setTimeout(() => a.classList.remove('dl-got'), 1600);
       } else if (target === 'close') {
-        if (!learned.close) { learned.close = true; try { localStorage.setItem('gl_close', '1'); } catch (_) {} }
         closeSpace();
       } else {
         if (!learned.open) {
@@ -1154,12 +1155,7 @@ function updateCursor() {
     app.hoverClose = null;
   }
 
-  const sc = $('space-close');
-  sc.classList.toggle('focus', !!app.hoverClose);
-  if (app.hoverClose) {
-    $('space-close-sub').textContent =
-      learned.close ? UI.closeSub.done[lang] : UI.closeSub.hint[lang];
-  }
+  $('space-close').classList.toggle('focus', !!app.hoverClose);
   const over = app.hoverDl || app.hoverClose ? ' on-target' : '';
   el.className = (g.mode === 'grab' ? 'm-grab' : g.mode === 'palm' ? 'm-palm'
     : g.mode === 'point' ? 'm-point' : '') + over;
@@ -1240,7 +1236,10 @@ function updateFieldTouch() {
   const g = app.gestures;
   if (app.ghost) return;                      // the ghost hand owns the fabric
   if (g.active && app.state === 'present' && g.hand) {
-    const tip = g.hand.pointing ? g.hand.index : g.hand.palm;
+    const tip = {
+      x: g.hand.index.x * 0.55 + g.hand.palm.x * 0.45,
+      y: g.hand.index.y * 0.55 + g.hand.palm.y * 0.45,
+    };
     const local = app.field.frameToLocal(tip.x, tip.y, 0);
     const strength = 0.22 + 0.4 * g.pinchStrength;
     app.field.setHandLocal(local.x, local.y, strength);
@@ -1323,7 +1322,6 @@ function renderStatic() {
   setText('denied-action', UI.denied.a[lang]);
 
   setText('space-close-t', UI.close[lang]);
-  setText('space-close-sub', (learned.close ? UI.closeSub.done : UI.closeSub.hint)[lang]);
   setText('asleep-h', UI.asleep.h[lang]);
   setText('asleep-s', UI.asleep.s[lang]);
   setText('asleep-action', UI.asleep.a[lang]);

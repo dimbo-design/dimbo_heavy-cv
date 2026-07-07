@@ -8,6 +8,7 @@
   <meta property="og:title" content="Дмитрий Тогулев — живой интерфейс">
   <meta property="og:description" content="Сайт, который видит. Depth Anything V2 + WebGPU, всё локально в браузере.">
   <meta property="og:image" content="assets/og_img.png">
+  <meta name="generator" content="Claude Code · Fable 5 (Anthropic)">
   <link rel="icon" type="image/png" href="assets/favicon.png">
 
   <link rel="preload" href="assets/fonts/FixelDisplay-Regular.otf" as="font" type="font/otf" crossorigin>
@@ -83,10 +84,15 @@
       <div id="space-scroll"><div id="space-inner"></div></div>
       <div id="scroll-hint"><i></i></div>
       <!-- the one proven pattern: an explicit target + dwell, same as opening -->
-      <button id="space-close" class="node-kin">
+      <!-- the cross: a capital-letter-sized × beside the title, inward of
+           the column (within the hand's reach); label + bar bloom on focus -->
+      <button id="space-close" aria-label="close">
+        <svg viewBox="0 0 40 40" aria-hidden="true">
+          <line x1="8" y1="8" x2="32" y2="32"/>
+          <line x1="32" y1="8" x2="8" y2="32"/>
+        </svg>
         <span class="n-label" id="space-close-t"></span>
         <i class="n-bar"><i class="n-fill"></i></i>
-        <span class="n-sub" id="space-close-sub"></span>
       </button>
     </section>
 

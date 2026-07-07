@@ -123,8 +123,13 @@ export class Gestures extends EventTarget {
     this.mode = mode;
     this.hand = h;                 // raw frame-space geometry for the mirror
 
-    // ---- cursor
-    const src = mode === 'point' ? h.index : this.grabbing ? h.pinchPoint : h.palm;
+    // ---- cursor: a stable anatomical point. Switching between fingertip
+    // and palm centre made the cursor hop whenever 'pointing' flickered —
+    // a fixed blend keeps one continuous point regardless of hand shape
+    const src = this.grabbing ? h.pinchPoint : {
+      x: h.index.x * 0.55 + h.palm.x * 0.45,
+      y: h.index.y * 0.55 + h.palm.y * 0.45,
+    };
     const vw = window.innerWidth, vh = window.innerHeight;
     const x = ((1 - src.x) - 0.5) * this.gain * vw + vw / 2;
     const y = (src.y - 0.5) * this.gain * vh + vh / 2;

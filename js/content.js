@@ -315,10 +315,6 @@ export const UI = {
   },
 
   close: { ru: 'закрыть', en: 'close' },
-  closeSub: {
-    hint: { ru: 'задержи руку', en: 'hold your hand' },
-    done: { ru: 'к зеркалу', en: 'back to the mirror' },
-  },
   nodeHint: { ru: 'задержи руку — откроется', en: 'hold your hand — it opens' },
 
   telemetry: {
