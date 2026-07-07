@@ -503,25 +503,19 @@ function openSpace(id) {
 
 // the cross sits beside the REAL first line of the title — measured, not
 // guessed: every chapter's title has its own length
+// Y rides the title's first line; X lives in the stylesheet — outside the
+// column width (anchoring X to the line's text end put the cross inside
+// short headings)
 function positionCloseCross() {
   const sc = $('space-close');
   const h2 = document.querySelector('#space-inner h2');
   if (!sc || !h2 || !app.spaceId) return;
-  const range = document.createRange();
-  range.selectNodeContents(h2);
-  const line = range.getClientRects()[0];
-  if (!line) return;
   const fs = parseFloat(getComputedStyle(h2).fontSize);
   const lineH = parseFloat(getComputedStyle(h2).lineHeight) || fs * 1.08;
   sc.style.setProperty('--cross', `${Math.round(fs * 0.82)}px`);
   sc.style.top = `${h2.offsetTop + (lineH - fs * 0.82) / 2}px`;
-  const gap = 20;
-  if (document.body.classList.contains('space-right')) {
-    sc.style.left = `${line.left - gap - fs * 0.82}px`;
-  } else {
-    sc.style.left = `${line.right + gap}px`;
-  }
-  sc.style.right = 'auto';
+  sc.style.left = '';
+  sc.style.right = '';
 }
 
 function closeSpace() {

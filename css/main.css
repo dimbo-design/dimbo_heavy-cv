@@ -374,9 +374,10 @@ body.space-open .blk {
    the title (within the hand's reach); label + fill bar bloom on focus */
 #space-close {
   position: absolute; z-index: 5;
-  /* top/left are set from the title's real first line in JS */
+  /* Y follows the title's first line (set in JS); X sits firmly OUTSIDE
+     the text column — beyond the column width, never inside the heading */
   top: calc(15vh + 22px);
-  left: calc(7.5vw + min(46vw, 640px) + 20px);
+  left: calc(7.5vw + min(46vw, 640px) + 42px);
   display: flex; flex-direction: column; align-items: center; gap: 6px;
   opacity: 0; pointer-events: none;
   transition: opacity 0.7s var(--ease) 0.4s;
@@ -387,11 +388,11 @@ body.space-open .blk {
   background: radial-gradient(ellipse, rgba(10, 10, 13, 0.75), transparent 72%);
   filter: blur(4px);
 }
-body.space-open #space-close { opacity: 0.38; pointer-events: auto; }
+body.space-open #space-close { opacity: 0.58; pointer-events: auto; }
 body.space-open #space-close:hover,
 body.space-open #space-close.focus { opacity: 1; }
 body.space-right #space-close {
-  left: auto; right: calc(7.5vw + min(46vw, 640px) + 48px);
+  left: auto !important; right: calc(7.5vw + min(46vw, 640px) + 42px);
 }
 #space-close svg {
   width: var(--cross, clamp(30px, 2.9vw, 46px));
