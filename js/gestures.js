@@ -54,6 +54,7 @@ export class Gestures extends EventTarget {
     this._palmMom = null;               // recent palm-up energy guards "home"
     this._fistHeld = false;             // the fist as a clutch (lightbox layer)
     this._fistScreen = null;
+    this._spreadGraceUntil = 0;         // zoom survives a flickering second hand
   }
 
   // main reports whether a flick actually moved content. A stroke that met
@@ -103,12 +104,28 @@ export class Gestures extends EventTarget {
         this._emit('spreadmove', { scale: dist2 / this._spread.d0 });
       }
       this._spreadLast = dist2 / this._spread.d0;
+      this._spreadGraceUntil = now + 420;
       this.mode = 'spread';
       return;
     }
     if (this._spread && !twoReal) {
+      // the second hand flickers in tracking constantly (field log: zoom
+      // sessions shredded into 0.2-0.4s scraps with swipes firing in the
+      // gaps) — hold the zoom through a short grace and resume seamlessly
+      if (now < this._spreadGraceUntil) {
+        this.mode = 'spread';
+        return;
+      }
       this._spread = null;
       this._emit('spreadend', { scale: this._spreadLast || 1 });
+      // hands coming back from a zoom posture are still moving —
+      // they may not speak for a moment through any one-hand act
+      this._swipeCooldownUntil = Math.max(this._swipeCooldownUntil, now + 700);
+      this._flickHoldUntil = Math.max(this._flickHoldUntil, now + 700);
+      this._fistCooldownUntil = Math.max(this._fistCooldownUntil, now + 700);
+      this._pinchBlockUntil = Math.max(this._pinchBlockUntil, now + 700);
+      this._samples.length = 0;
+      this._relSamples.length = 0;
     }
 
     if (!this.active) {
@@ -415,6 +432,10 @@ export class Gestures extends EventTarget {
       this._fistHeld = false;
       this._fistScreen = null;
       this._emit('fistend', {});
+    }
+    if (this._spread) {
+      this._spread = null;
+      this._emit('spreadend', { scale: this._spreadLast || 1 });
     }
     this.active = false;
     this.mode = 'idle';
