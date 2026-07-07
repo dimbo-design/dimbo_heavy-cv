@@ -1,13 +1,12 @@
 // Gesture interpretation over hand summaries.
 //
-// Design rule: redundancy over purity. We don't know the visitor's
-// background, so every plausible attempt maps to the nearest intent:
-//   grab   = pinch OR fist            (drag strips, scroll, stir the field)
-//   tap    = quick pinch-release      (acts like a click at the cursor)
-//   poke   = hand pushed at screen    (also a click — people jab at things)
-//   dwell  = holding still on target  (charge ring → open; handled in main)
-//   swipe  = fast open-hand throw     (horizontal: close/flip · vertical: scroll)
-// Every action is reversible; feedback is immediate (cursor + field touch).
+// Design rule: a MINIMAL, conflict-free vocabulary. One motion — one meaning:
+//   hand moves            → cursor + focus (nothing else reacts)
+//   dwell still on target → charge ring → act        (open node / take pdf)
+//   grab (pinch OR fist) + move → drag, axis-locked  (strip ⟷ · content ↕)
+//   grab held still       → charge ring → close      (chapter / lightbox)
+//   quick pinch (tap)     → silent click at the cursor
+// Every action is reversible and previewed by the ring before it fires.
 
 export class Gestures extends EventTarget {
   constructor() {
@@ -28,20 +27,16 @@ export class Gestures extends EventTarget {
     this._grabMoved = 0;
     this._grabLive = false;       // grabstart emitted (movement or time passed)
 
-    this._sizeSlow = 0;           // slow EMA of hand size → poke baseline
-    this._sizeFast = 0;
-    this._pokeCooldownUntil = 0;
-
     this._lastSeen = 0;
     this._lastT = 0;
     this._samples = [];
-    this._swipeCooldownUntil = 0;
     this._hasCursor = false;
-    this._prof = { swipeVx: 1150, swipeVy: 950 };
   }
 
-  // per-state thresholds: deeper into content, the lighter the flick
-  setProfile(p) { this._prof = { ...this._prof, ...p }; }
+  // grab held without movement — the deliberate "close" charge in main
+  grabStillMs(now) {
+    return this.grabbing && !this._grabLive ? (now ?? performance.now()) - this._grabStartAt : 0;
+  }
 
   ingest({ hands }) {
     const now = performance.now();
@@ -55,8 +50,6 @@ export class Gestures extends EventTarget {
 
     if (!this.active) {
       this.active = true;
-      this._sizeSlow = h.size;
-      this._sizeFast = h.size;
       this._emit('enter', {});
     }
 
@@ -104,16 +97,6 @@ export class Gestures extends EventTarget {
     this._samples.push({ x: this.cursor.x, y: this.cursor.y, t: now });
     while (this._samples.length && now - this._samples[0].t > 300) this._samples.shift();
 
-    // ---- poke: the hand jabs toward the screen (size grows fast)
-    this._sizeFast += (h.size - this._sizeFast) * 0.4;
-    this._sizeSlow += (h.size - this._sizeSlow) * 0.05;
-    if (!this.grabbing && now > this._pokeCooldownUntil &&
-        this._sizeFast > this._sizeSlow * 1.24 && this.speed < 600) {
-      this._pokeCooldownUntil = now + 1000;
-      this._sizeSlow = this._sizeFast;
-      this._emit('poke', { x: this.cursor.x, y: this.cursor.y });
-    }
-
     // ---- grab lifecycle with tap detection
     if (this.grabbing && !wasGrabbing) {
       this._grabStartAt = now;
@@ -122,7 +105,7 @@ export class Gestures extends EventTarget {
       this._grabLive = false;
     } else if (this.grabbing && wasGrabbing) {
       this._grabMoved += Math.hypot(this.cursor.x - px, this.cursor.y - py);
-      if (!this._grabLive && (this._grabMoved > 14 || now - this._grabStartAt > 260)) {
+      if (!this._grabLive && this._grabMoved > 14) {
         this._grabLive = true;
         this._emit('grabstart', { x: this._grabStart.x, y: this._grabStart.y, source: this._grabSource });
       }
@@ -142,25 +125,6 @@ export class Gestures extends EventTarget {
       this._grabLive = false;
     }
 
-    // ---- swipe: open-hand throw, both axes
-    if (!this.grabbing && (mode === 'palm' || mode === 'hand') &&
-        now > this._swipeCooldownUntil && this._samples.length > 3) {
-      const s0 = this._samples[0];
-      const dx = this.cursor.x - s0.x;
-      const dy = this.cursor.y - s0.y;
-      const v = this._velocity();
-      const H = Math.abs(dx) > window.innerWidth * 0.15 &&
-                Math.abs(dx) > Math.abs(dy) * 1.5 && Math.abs(v.vx) > this._prof.swipeVx;
-      const V = Math.abs(dy) > window.innerHeight * 0.16 &&
-                Math.abs(dy) > Math.abs(dx) * 1.5 && Math.abs(v.vy) > this._prof.swipeVy;
-      if (H || V) {
-        this._swipeCooldownUntil = now + 850;
-        this._samples.length = 0;
-        this._emit('swipe', H
-          ? { dir: dx > 0 ? 'right' : 'left', axis: 'x', vx: v.vx, vy: v.vy }
-          : { dir: dy > 0 ? 'down' : 'up', axis: 'y', vx: v.vx, vy: v.vy });
-      }
-    }
   }
 
   _dropHand() {

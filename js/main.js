@@ -3,9 +3,9 @@
 // States: boot → (invite) → watching ⇄ present ⇄ space(chapter)
 //                ↘ denied / failed          mobile is a separate early exit.
 //
-// Opening a chapter: dwell an open hand or a pointing finger on a node,
-// lean toward the screen, or silently click. Closing: swipe the content
-// away, lean back, step out of frame, Esc, or click the empty side.
+// Opening a chapter: dwell a calm hand on a node (ring charges), or click.
+// Dragging: grab (pinch/fist) + move, axis-locked. Closing: grab held still
+// (ring charges), stepping out of frame, Esc, or a click on the empty side.
 
 import { CONFIG } from './config.js';
 import { NODES, UI, renderPanel } from './content.js';
@@ -186,21 +186,15 @@ function boot() {
 
   // -- presence semantics
   signals.onPresence = (on) => on ? enterPresent() : leavePresent();
-  signals.onLeanIn = () => {
-    const now = performance.now();
-    if (!app.focusedId || app.spaceId) return;
-    if (now - app.presentSince < 1800) return;          // just arrived — not intent
-    if (now - app.focusChangedAt < 700) return;         // focus not settled yet
-    openSpace(app.focusedId);
-  };
-  signals.onLeanBack = () => { if (app.lb) closeLightbox(); else closeSpace(); };
+  // lean-based open/close is deliberately gone: proximity was firing
+  // by accident and eroded trust in the whole gesture layer
 
   // -- hand pipeline
   hands.addEventListener('ready', () => { app.handsReady = true; });
   hands.addEventListener('fatal', () => { app.handsFailed = true; });
   hands.addEventListener('hands', (e) => gestures.ingest(e.detail));
 
-  for (const ev of ['enter', 'leave', 'grabstart', 'grabend', 'tap', 'poke', 'swipe']) {
+  for (const ev of ['enter', 'leave', 'grabstart', 'grabend', 'tap']) {
     gestures.addEventListener(ev, (e) => {
       app.glog.push(`${(performance.now() / 1000).toFixed(1)}s ${ev}${e.detail?.dir ? ' ' + e.detail.dir : ''}`);
       if (app.glog.length > 6) app.glog.shift();
@@ -217,9 +211,7 @@ function boot() {
   gestures.addEventListener('grabmove', (e) => onGrabMove(e.detail));
   gestures.addEventListener('grabend', (e) => onGrabEnd(e.detail));
   gestures.addEventListener('tap', (e) => onAirTap(e.detail));
-  gestures.addEventListener('poke', (e) => onAirTap(e.detail));
-  gestures.addEventListener('swipe', (e) => onSwipe(e.detail));
-  for (const ev of ['enter', 'grabstart', 'tap', 'poke', 'swipe'])
+  for (const ev of ['enter', 'grabstart', 'tap'])
     gestures.addEventListener(ev, () => { app.lastActivity = performance.now(); });
 
   engine.initWorker();
@@ -311,19 +303,6 @@ function leavePresent() {
   app.focusedId = null;
 }
 
-// per-state gesture profiles: deeper in, lighter the flick needed
-const GEST_PROFILES = {
-  browse:   { swipeVx: 1150, swipeVy: 950 },
-  chapter:  { swipeVx: 1000, swipeVy: 850 },
-  lightbox: { swipeVx: 850,  swipeVy: 800 },
-};
-
-function applyGestureProfile() {
-  const p = app.lb ? GEST_PROFILES.lightbox
-    : app.spaceId ? GEST_PROFILES.chapter : GEST_PROFILES.browse;
-  app.gestures.setProfile(p);
-}
-
 function applyCadence() {
   const present = app.signals?.present;
   const open = !!app.spaceId;
@@ -331,7 +310,6 @@ function applyCadence() {
     ? (open ? CONFIG.cadence.depthReading : CONFIG.cadence.depthPresent)
     : CONFIG.cadence.depthIdle);
   app.hands.setCadence(present ? CONFIG.cadence.handsPresent : CONFIG.cadence.handsIdle);
-  applyGestureProfile();
 }
 
 // ---------------------------------------------------------------- nodes
@@ -431,17 +409,31 @@ function onGrabStart({ x, y }) {
   if (app.lb) {
     app.drag = { kind: 'lightbox', acc: 0 };
   } else if (app.spaceId) {
-    const s = hitStrip(x, y);
-    app.drag = s ? { kind: 'strip', strip: s } : { kind: 'scroll' };
-    if (s) { s.vel = 0; s.el.classList.add('dragging'); }
+    // axis lock: the first centimetres decide — horizontal over a strip
+    // drags the strip, anything vertical scrolls; the axis never flips mid-drag
+    app.drag = { kind: 'pending', strip: hitStrip(x, y), accX: 0, accY: 0 };
   } else if (app.state === 'present') {
     app.drag = { kind: 'stir' };
   }
 }
 
 function onGrabMove({ dx, dy }) {
-  const d = app.drag;
+  let d = app.drag;
   if (!d) return;
+  if (d.kind === 'pending') {
+    d.accX += dx; d.accY += dy;
+    if (Math.hypot(d.accX, d.accY) < 12) return;
+    const { accX, accY, strip } = d;
+    if (strip && Math.abs(accX) > Math.abs(accY)) {
+      app.drag = d = { kind: 'strip', strip };
+      strip.vel = 0;
+      strip.el.classList.add('dragging');
+      moveStrip(strip, accX);
+      return;
+    }
+    app.drag = d = { kind: 'scroll' };
+    app.scroll.target = clamp(app.scroll.target - accY, 0, app.scroll.max);
+  }
   if (d.kind === 'lightbox') {
     d.acc += dx;
     $('lb-img').style.transform = `translateX(${d.acc * 0.35}px)`;
@@ -473,7 +465,7 @@ function onGrabEnd({ vx, vy }) {
   app.drag = null;
 }
 
-// air-tap / poke: acts like a click at the cursor — people jab at screens
+// air-tap: a quick pinch acts like a click at the cursor
 function onAirTap({ x, y }) {
   if (app.lb) {
     const r = $('lb-img').getBoundingClientRect();
@@ -500,21 +492,6 @@ function onAirTap({ x, y }) {
   if (app.state === 'present' && app.focusedId) openSpace(app.focusedId);
 }
 
-function onSwipe({ axis, dir }) {
-  if (app.lb) {
-    if (axis === 'x') lightboxStep(dir === 'left' ? 1 : -1);
-    else closeLightbox();
-    return;
-  }
-  if (!app.spaceId) return;
-  if (axis === 'x') {
-    closeSpace();
-  } else {
-    const step = window.innerHeight * 0.55 * (dir === 'up' ? 1 : -1);
-    app.scroll.target = clamp(app.scroll.target + step, 0, app.scroll.max);
-  }
-}
-
 // ---------------------------------------------------------------- lightbox
 
 function currentStripItems() {
@@ -535,7 +512,6 @@ function openLightbox(fig) {
   };
   renderLightbox();
   document.body.classList.add('lb-open');
-  applyGestureProfile();
   flipFrom(fig);
 }
 
@@ -623,7 +599,6 @@ function closeLightbox() {
   }
   app.lb = null;
   document.body.classList.remove('lb-open');
-  applyGestureProfile();
 }
 
 function moveStrip(s, dx) {
@@ -681,6 +656,16 @@ let fpsE = 60;
 let frameNo = 0;
 
 function loop(t) {
+  try {
+    loopBody(t);
+  } catch (err) {
+    app.glog.push('ERR ' + (err?.message || err));
+    if (app.glog.length > 6) app.glog.shift();
+  }
+  requestAnimationFrame(loop);
+}
+
+function loopBody(t) {
   const dt = Math.min(0.05, (t - lastT) / 1000);
   lastT = t;
   frameNo++;
@@ -694,13 +679,13 @@ function loop(t) {
 
     if (app.state === 'present') {
       const handActive = gestures.active;
-      const focusX = handActive
-        ? clamp((gestures.cursor.x / window.innerWidth - 0.5) * 2, -1.6, 1.6)
-        : clamp((signals.cx - 0.5) * 2 * CONFIG.focus.gain, -1.6, 1.6);
-      field.setGaze(focusX * 0.5, signals.cy);
+      // the scene turns with the head only — slow and stable;
+      // the hand moves nothing but its own small ring
+      const headX = clamp((signals.cx - 0.5) * 2 * CONFIG.focus.gain, -1.6, 1.6);
+      field.setGaze(headX * 0.35, signals.cy);
       const nodesDelay = returning ? CONFIG.reveal.nodesMs * 0.45 : CONFIG.reveal.nodesMs;
-    if (!app.nodesShown && t - app.presentSince > nodesDelay) revealNodes();
-      if (app.nodesShown && !app.spaceId) updateNodes(focusX, handActive);
+      if (!app.nodesShown && t - app.presentSince > nodesDelay) revealNodes();
+      if (app.nodesShown && !app.spaceId) updateNodes(headX, handActive);
     } else {
       field.setGaze(Math.sin(t * 0.00013) * 0.25, 0.5);
     }
@@ -715,7 +700,6 @@ function loop(t) {
   updateIdlePulse(t);
 
   if (t - lastTele > 500) { lastTele = t; renderTelemetry(); renderDebug(); }
-  requestAnimationFrame(loop);
 }
 
 function updateNodes(focusX, handActive) {
@@ -733,7 +717,7 @@ function updateNodes(focusX, handActive) {
     const p = app.field.projectAnchor(n.id);
     if (!el || !p) continue;
     if (p.behind) { el.style.opacity = 0; continue; }
-    const par = -focusX * 26 * (n.anchor.z / 3.4);
+    const par = -focusX * 13 * (n.anchor.z / 3.4);
     const x = p.x + par;
     el.style.transform =
       `translate(-50%, -50%) translate3d(${x}px, ${p.y}px, 0) scale(${p.scale})`;
@@ -757,6 +741,21 @@ function updateNodes(focusX, handActive) {
 // dwell-to-open: hold an open hand (or a pointing finger) on a node
 function updateHold(dt, now) {
   const g = app.gestures;
+
+  // a grab held still is the one deliberate "close" gesture —
+  // squeeze and hold, the ring charges, the chapter lets you go
+  if ((app.spaceId || app.lb) && g.grabStillMs(now) > 350 && now > app.hold.until) {
+    app.hold.target = 'close';
+    app.hold.p = Math.min(1, (g.grabStillMs(now) - 350) / CONFIG.hold.ms);
+    if (app.hold.p >= 1) {
+      app.hold.p = 0;
+      app.hold.until = now + 1500;
+      if (app.lb) closeLightbox(); else closeSpace();
+    }
+    return;
+  }
+  if (app.hold.target === 'close') { app.hold.target = null; app.hold.p = 0; }
+
   const handCalm = g.active &&
     (g.mode === 'palm' || g.mode === 'point' || g.mode === 'hand') &&
     g.speed < CONFIG.hold.maxSpeed && now > app.hold.until;
@@ -848,7 +847,7 @@ function updateSpacePhysics(dt) {
 function updateFieldTouch() {
   const g = app.gestures;
   if (g.active && app.state === 'present') {
-    const strength = 0.35 + 0.75 * g.pinchStrength;
+    const strength = 0.2 + 0.45 * g.pinchStrength;
     app.field.setHandScreen(g.cursor.x, g.cursor.y, strength);
   } else {
     app.field.setHandScreen(null, 0, 0);
