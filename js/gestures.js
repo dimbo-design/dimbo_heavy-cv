@@ -391,7 +391,11 @@ export class Gestures extends EventTarget {
     // ---- open-palm flings. "pure" = the hand was honestly open for the
     // WHOLE window (fingers apart, palm spread) — a failed pinch attempt
     // drifting away must never register as a closing brush.
+    // two real hands where zoom is possible = a spread brewing, not a fling:
+    // the spread needs 4 frames to confirm, and the moving palm used to fire
+    // a swipe in that gap — photos flipped right before every zoom
     if (!this.grabbing && !this._fistHeld && !this.calmActs &&
+        !(this.spreadEnabled && h2 && h2.size > 0.11) &&
         (mode === 'palm' || mode === 'hand') &&
         now > this._swipeCooldownUntil && this._samples.length > 3) {
       const s0 = this._samples[0];
