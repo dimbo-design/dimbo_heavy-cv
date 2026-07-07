@@ -35,6 +35,11 @@ export class Gestures extends EventTarget {
     this._samples = [];
     this._hasCursor = false;
     this.spreadEnabled = false;   // main enables it inside the lightbox only
+    // the zoomed photo speaks a tiny vocabulary: fist, pinch, spread, open
+    // palm. Swipes and flicks must not merely be ignored there — a detected
+    // non-gesture still sets cooldowns and starved the fist (field log:
+    // clench over a zoomed photo never landed). Dead means undetected.
+    this.calmActs = false;
     // main enables it where something can actually move sideways (strip
     // chapters, lightbox). Elsewhere a diagonal snap must not be consumed
     // as a sideways sweep — on strip-less chapters that read as "scroll
@@ -334,7 +339,7 @@ export class Gestures extends EventTarget {
     // flick may not START from a fist (r0.o), may not open explosively wide
     // (that's an unclench), and stays quiet while a second hand is in frame
     // (zooming hands sweep — they must not flip photos).
-    if (!this.grabbing && !this._fistHeld &&
+    if (!this.grabbing && !this._fistHeld && !this.calmActs &&
         now > this._flickHoldUntil && this._relSamples.length > 3 &&
         !(h2 && h2.size > 0.08)) {
       const r0 = this._relSamples[0];
@@ -386,7 +391,8 @@ export class Gestures extends EventTarget {
     // ---- open-palm flings. "pure" = the hand was honestly open for the
     // WHOLE window (fingers apart, palm spread) — a failed pinch attempt
     // drifting away must never register as a closing brush.
-    if (!this.grabbing && !this._fistHeld && (mode === 'palm' || mode === 'hand') &&
+    if (!this.grabbing && !this._fistHeld && !this.calmActs &&
+        (mode === 'palm' || mode === 'hand') &&
         now > this._swipeCooldownUntil && this._samples.length > 3) {
       const s0 = this._samples[0];
       const dx = this.cursor.x - s0.x;

@@ -683,6 +683,13 @@ function onSpreadMove({ scale }) {
   app.lb.zoom = clamp((app.lb.zoom0 || 1) * scale, 1, 2.6);
   if (app.lb.zoom <= 1.02) { app.lb.zoom = 1; app.lb.panX = 0; app.lb.panY = 0; }
   applyLbTransform();
+  syncCalm();
+}
+
+// the zoomed state's vocabulary shrinks to fist/pinch/spread/open palm —
+// at the DETECTION level: a silenced swipe still poisons cooldowns
+function syncCalm() {
+  app.gestures.calmActs = !!(app.lb && app.lb.zoom > 1.05);
 }
 
 function onSpreadEnd() { /* zoom applies live; nothing to finalize */ }
@@ -717,6 +724,7 @@ function onUnclench() {
   if (app.lb.zoom > 1.05) {
     app.lb.zoom = 1; app.lb.panX = 0; app.lb.panY = 0;
     applyLbTransform();
+    syncCalm();
     return;
   }
   closeLightbox();
@@ -1007,6 +1015,7 @@ function closeLightbox() {
   app.fist = null;
   app.lbCooldownUntil = performance.now() + 800;
   app.gestures.spreadEnabled = false;
+  app.gestures.calmActs = false;
   // back to the chapter's own rule: sideways flicks only where strips live
   app.gestures.flickXEnabled =
     !!app.spaceId && !document.body.classList.contains('space-right');
