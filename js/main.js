@@ -202,7 +202,7 @@ function boot() {
   hands.addEventListener('fatal', () => { app.handsFailed = true; });
   hands.addEventListener('hands', (e) => gestures.ingest(e.detail));
 
-  for (const ev of ['enter', 'leave', 'grabstart', 'grabend', 'tap', 'swipe']) {
+  for (const ev of ['enter', 'leave', 'grabstart', 'grabend', 'tap', 'swipe', 'pull', 'push']) {
     gestures.addEventListener(ev, (e) => {
       app.glog.push(`${(performance.now() / 1000).toFixed(1)}s ${ev}${e.detail?.dir ? ' ' + e.detail.dir : ''}`);
       if (app.glog.length > 6) app.glog.shift();
@@ -220,7 +220,9 @@ function boot() {
   gestures.addEventListener('grabend', (e) => onGrabEnd(e.detail));
   gestures.addEventListener('tap', (e) => onAirTap(e.detail));
   gestures.addEventListener('swipe', (e) => onSwipe(e.detail));
-  for (const ev of ['enter', 'grabstart', 'tap', 'swipe'])
+  gestures.addEventListener('pull', (e) => onPull(e.detail));
+  gestures.addEventListener('push', () => onPush());
+  for (const ev of ['enter', 'grabstart', 'tap', 'swipe', 'pull', 'push'])
     gestures.addEventListener(ev, () => { app.lastActivity = performance.now(); });
 
   engine.initWorker();
@@ -478,9 +480,10 @@ function onGrabMove({ dx, dy }) {
   } else if (d.kind === 'strip') {
     moveStrip(d.strip, dx);
   } else if (d.kind === 'scroll') {
-    // dead-zone kills tracking tremor; the cap kills single-frame jumps
+    // dead-zone kills tremor, the cap kills jumps, the EMA rounds the rest
     const step = Math.abs(dy) < 1.5 ? 0 : clamp(dy, -70, 70);
-    app.scroll.target = clamp(app.scroll.target - step, 0, app.scroll.max);
+    d.flt = (d.flt ?? 0) * 0.5 + step * 0.5;
+    app.scroll.target = clamp(app.scroll.target - d.flt, 0, app.scroll.max);
     app.scroll.vel = 0;
   }
 }
@@ -497,7 +500,7 @@ function onGrabEnd({ vx, vy }) {
     if (Math.abs(d.acc) > 170 || Math.abs(vy) > 900) closeLightbox();
   } else if (d.kind === 'page') {
     $('space-inner').classList.remove('page-grabbed');
-    const thrown = Math.abs(d.acc) > window.innerWidth * 0.18 || Math.abs(vx) > 900;
+    const thrown = Math.abs(d.acc) > window.innerWidth * 0.26 || Math.abs(vx) > 1300;
     if (thrown) {
       app.pageXVel = clamp(vx, -2600, 2600) || Math.sign(d.acc) * 1600;
       closeSpace();                    // the chapter flies off as it fades
@@ -508,6 +511,46 @@ function onGrabEnd({ vx, vy }) {
   } else if (d.kind === 'scroll') {
     app.scroll.vel = -vy;
   }
+  app.drag = null;
+}
+
+// grab + pull toward you: dive one layer deeper.
+// main screen → open the focused node · chapter → lift a photo into the lightbox
+function onPull({ x, y }) {
+  cancelDrag();
+  if (app.lb) return;                                  // already at the deepest layer
+  if (app.spaceId) {
+    const figs = currentStripItems();
+    if (!figs.length) return;
+    let best = null, bd = Infinity;
+    for (const f of figs) {
+      const r = f.getBoundingClientRect();
+      if (r.width === 0) continue;
+      const d = Math.abs(r.left + r.width / 2 - x) + Math.abs(r.top + r.height / 2 - y) * 0.6;
+      if (d < bd) { bd = d; best = f; }
+    }
+    if (best) openLightbox(best);
+    return;
+  }
+  if (app.state === 'present' && app.focusedId) openSpace(app.focusedId);
+}
+
+// grab + push away: surface back up. lightbox → chapter → main screen
+function onPush() {
+  cancelDrag();
+  if (app.lb) closeLightbox();
+  else if (app.spaceId) closeSpace();
+}
+
+function cancelDrag() {
+  const d = app.drag;
+  if (!d) return;
+  if (d.kind === 'strip') d.strip.el.classList.remove('dragging');
+  if (d.kind === 'lightbox' || d.kind === 'lb-toss') {
+    $('lb-img').style.transform = '';
+    $('lb-img').style.opacity = '';
+  }
+  if (d.kind === 'page') $('space-inner').classList.remove('page-grabbed');
   app.drag = null;
 }
 
@@ -1048,7 +1091,8 @@ function renderDebug() {
     `motion   ${s.motion.toFixed(4)}  peak ${s.motionPeak.toFixed(4)}`,
     `prox     ${s.proximity.toFixed(3)}  base ${s.baseline.toFixed(3)}`,
     `head     ${s.cx.toFixed(2)} ${s.cy.toFixed(2)}`,
-    `hand     ${g.active ? g.mode : '—'}  v ${Math.round(g.speed)}  pinch ${g.pinchStrength.toFixed(2)}`,
+    `hand     ${g.active ? g.mode : '—'}  v ${Math.round(g.speed)}`,
+    `pinch    ${g.hand ? g.hand.pinch.toFixed(2) : '—'}  base ${g._pinchSlow?.toFixed(2) ?? '—'}  size ${g.hand?.size.toFixed(2) ?? '—'}`,
     `focus    ${app.focusedId || '—'}  hold ${app.hold.p.toFixed(2)}`,
     `infer    ${Math.round(app.engine?.inferMs || 0)}ms · ${app.device || '…'} · ${app.engine?.intervalMs}ms`,
     `hands    ${app.handsFailed ? 'FAILED' : app.handsReady ? 'ready' : 'loading'}`,

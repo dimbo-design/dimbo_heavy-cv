@@ -2,9 +2,11 @@
 //
 // Design rule: a MINIMAL, conflict-free vocabulary built on two hand states:
 //   open-ish hand → pointing (through your own reflection on the main screen)
-//   pinch = grab in the air → drag, axis-locked; a fast release = a throw
+//   pinch = grab in the air → drag, axis-locked; pull it to you / push it away
+//   to dive a layer deeper / surface back up (size of the hand = depth)
 // A quick pinch is a click. An open-palm fling flips (lightbox, strips).
-// The fist is deliberately NOT a gesture: a relaxed hand reads as one.
+// Grabs are recognized as an ACT of closing the fingers, never as a static
+// posture — a relaxed hand keeps its fingers near each other and must stay free.
 
 export class Gestures extends EventTarget {
   constructor() {
@@ -47,18 +49,27 @@ export class Gestures extends EventTarget {
 
     if (!this.active) {
       this.active = true;
+      this._pinchSlow = h.pinch;
       this._emit('enter', {});
     }
 
-    // ---- grab state: pinch only ("grab the air"); a relaxed hand must stay
-    // free. Two consecutive frames confirm both engage and release — single
-    // noisy frames must not grab or drop what you're holding.
+    // ---- grab: recognized as the ACT of pinching. A slow-moving baseline
+    // remembers how far apart the fingers usually are; engaging requires the
+    // distance to visibly DROP below it. A hand that arrives already-curled
+    // never grabs by accident. Two frames confirm engage and release.
+    this._pinchSlow += (h.pinch - this._pinchSlow) * 0.08;
     const wasGrabbing = this.grabbing;
     if (!this._pinched) {
-      this._pinchIn = h.pinch < 0.30 ? (this._pinchIn || 0) + 1 : 0;
-      if (this._pinchIn >= 2) { this._pinched = true; this._pinchOut = 0; }
+      const closingAct = h.pinch < 0.28 && this._pinchSlow - h.pinch > 0.10;
+      this._pinchIn = closingAct ? (this._pinchIn || 0) + 1 : 0;
+      if (this._pinchIn >= 2) {
+        this._pinched = true;
+        this._pinchOut = 0;
+        this._grabSize0 = h.size;
+        this._zFired = false;
+      }
     } else {
-      this._pinchOut = h.pinch > 0.48 ? (this._pinchOut || 0) + 1 : 0;
+      this._pinchOut = h.pinch > 0.42 ? (this._pinchOut || 0) + 1 : 0;
       if (this._pinchOut >= 2) { this._pinched = false; this._pinchIn = 0; }
     }
     this.pinchStrength = clamp((0.55 - h.pinch) / 0.35, 0, 1);
@@ -98,6 +109,18 @@ export class Gestures extends EventTarget {
 
     this._samples.push({ x: this.cursor.x, y: this.cursor.y, t: now });
     while (this._samples.length && now - this._samples[0].t > 300) this._samples.shift();
+
+    // ---- depth axis while grabbing: pull to you = dive, push away = surface
+    if (this._pinched && !this._zFired && this._grabSize0) {
+      const ratio = h.size / this._grabSize0;
+      if (ratio > 1.26) {
+        this._zFired = true;
+        this._emit('pull', { x: this.cursor.x, y: this.cursor.y });
+      } else if (ratio < 0.78) {
+        this._zFired = true;
+        this._emit('push', { x: this.cursor.x, y: this.cursor.y });
+      }
+    }
 
     // ---- grab lifecycle with tap detection
     if (this.grabbing && !wasGrabbing) {
