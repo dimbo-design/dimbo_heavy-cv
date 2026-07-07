@@ -220,12 +220,12 @@ export class Gestures extends EventTarget {
         this._samples.length = 0;
         this._emit('swipe', { axis: 'x', dir: dx > 0 ? 'right' : 'left', vx: v.vx, pure });
       } else if (pure &&
-          dy > window.innerHeight * 0.18 &&
-          dy > Math.abs(dx) * 1.6 && v.vy > 1250) {
+          Math.abs(dy) > window.innerHeight * 0.18 &&
+          Math.abs(dy) > Math.abs(dx) * 1.6 && Math.abs(v.vy) > 1250) {
         this._swipeCooldownUntil = now + 900;
         this._fistCooldownUntil = Math.max(this._fistCooldownUntil, now + 700);
         this._samples.length = 0;
-        this._emit('swipe', { axis: 'y', dir: 'down', vy: v.vy, pure: true });
+        this._emit('swipe', { axis: 'y', dir: dy > 0 ? 'down' : 'up', vy: v.vy, pure: true });
       }
     }
   }

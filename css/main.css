@@ -120,6 +120,13 @@ a:hover { border-bottom-color: var(--ink-dim); }
 }
 .ghost:hover { color: var(--ink-dim); }
 
+/* asleep = quiet mouse mode: the message floats, the portfolio stays usable */
+#asleep.quiet { pointer-events: none; gap: 20px; }
+#asleep.quiet h1 { font-size: clamp(20px, 2vw, 28px); max-width: 26ch; }
+#asleep.quiet .small { max-width: 46ch; }
+#asleep.quiet .ghost, #asleep.quiet a { pointer-events: auto; }
+body.space-open #asleep { opacity: 0; pointer-events: none !important; transition: opacity 0.5s; }
+
 /* the iris — invitation to be seen */
 .iris {
   display: flex; flex-direction: column; align-items: center; gap: 20px;

@@ -293,12 +293,12 @@ export const UI = {
   },
 
   asleep: {
-    h:  { ru: 'В этом браузере интерфейс останется спящим.',
-          en: 'In this browser the interface will stay asleep.' },
-    s:  { ru: 'Ему нужно быстрое железо: откройте страницу в Chrome или Opera — и он вас увидит. Или знакомьтесь так:',
-          en: 'It needs fast hardware: open this page in Chrome or Opera and it will see you. Or meet me the simple way:' },
-    a:  { ru: 'всё равно разбудить — будет медленно',
-          en: 'wake it anyway — it will be slow' },
+    h:  { ru: 'Живому зеркалу нужно железо посильнее.',
+          en: 'The living mirror needs stronger hardware.' },
+    s:  { ru: 'Ничего страшного: портфолио открыто и мышкой — пункты вокруг, клик открывает. Полная версия живёт в Chrome и Opera.',
+          en: 'No harm done: the portfolio opens with a mouse — the items are all around, a click opens them. The full version lives in Chrome and Opera.' },
+    a:  { ru: 'разбудить зеркало здесь — оно будет неторопливым',
+          en: 'wake the mirror here — it will take its time' },
   },
 
   failed: {

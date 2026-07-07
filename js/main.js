@@ -189,6 +189,7 @@ const app = {
   pointer: null,            // fingertip of the REFLECTION, screen px (main screen)
   lastDepth: null,
   hold: { p: 0, target: null, until: 0 },
+  ghost: null, ghostPlayed: false,   // the reflection demonstrates a reach
   lbCooldownUntil: 0,
   scroll: { y: 0, target: 0, vel: 0, max: 0, over: 0 },
   pageX: 0, pageXVel: 0,    // chapter grabbed/thrown sideways
@@ -656,8 +657,17 @@ function cancelDrag() {
 // open-palm fling ⟷ flips; open-palm brush ↓ closes the current layer
 function onSwipe({ axis, dir, vx, pure }) {
   if (axis === 'y') {
-    if (app.lb) closeLightbox();
-    else if (app.spaceId) closeSpace();
+    if (app.lb) { if (dir === 'down') closeLightbox(); return; }
+    if (!app.spaceId) return;
+    // everyone's first instinct: waving the palm vertically to scroll.
+    // It scrolls. Waving down when already at the top throws the page away.
+    if (dir === 'up') {
+      app.scroll.target = clamp(app.scroll.target + window.innerHeight * 0.6, 0, app.scroll.max);
+    } else if (app.scroll.y < 60) {
+      closeSpace();
+    } else {
+      app.scroll.target = clamp(app.scroll.target - window.innerHeight * 0.6, 0, app.scroll.max);
+    }
     return;
   }
   if (app.lb) { lightboxStep(dir === 'left' ? 1 : -1); return; }
@@ -925,6 +935,8 @@ function loopBody(t) {
       const nodesDelay = returning ? CONFIG.reveal.nodesMs * 0.45 : CONFIG.reveal.nodesMs;
       if (!app.nodesShown && t - app.presentSince > nodesDelay) revealNodes();
       if (app.nodesShown && !app.spaceId) updateNodes(headX, handActive);
+    } else if (app.state === 'asleep' && app.nodesShown) {
+      updateNodes(0, false, false);
     }
 
     field.frame(dt * (lowPower ? 2 : 1));
@@ -933,6 +945,7 @@ function loopBody(t) {
   updateHold(dt, t);
   updateCursor();
   updateSpacePhysics(dt);
+  updateGhostHand(t);
   updateFieldTouch();
   updateIdlePulse(t);
 
@@ -963,7 +976,7 @@ function reflectionPointer() {
   return p.behind ? null : { x: p.x, y: p.y, local };
 }
 
-function updateNodes(focusX, handActive) {
+function updateNodes(focusX, handActive, focusable = true) {
   const pt = handActive && app.pointer ? app.pointer : null;
   const cursorPx = pt ? pt.x
     : window.innerWidth * (0.5 + 0.5 * clamp(focusX, -1, 1) * 0.8);
@@ -986,6 +999,14 @@ function updateNodes(focusX, handActive) {
 
     const d = Math.hypot(x - cursorPx, (p.y - cursorPy) * (handActive ? 1 : 0.7));
     if (d < bestDist) { bestDist = d; best = n.id; }
+  }
+
+  if (!focusable) {
+    if (app.focusedId) {
+      app.focusedId = null;
+      for (const el of document.querySelectorAll('.node')) el.classList.remove('focus');
+    }
+    return;
   }
 
   // sticky focus: once a node is lit, it takes a real departure to lose it —
@@ -1150,6 +1171,7 @@ function updateSpacePhysics(dt) {
 // visitor sees their own hand in the mirror
 function updateFieldTouch() {
   const g = app.gestures;
+  if (app.ghost) return;                      // the ghost hand owns the fabric
   if (g.active && app.state === 'present' && g.hand) {
     const tip = g.hand.pointing ? g.hand.index : g.hand.palm;
     const local = app.field.frameToLocal(tip.x, tip.y, 0);
@@ -1158,6 +1180,44 @@ function updateFieldTouch() {
   } else {
     app.field.setHandLocal(null, 0, 0);
   }
+}
+
+// nobody lifts a hand — so the reflection does it first: a ghost of dots
+// rises from the form and reaches for a node, then dissolves. Not a
+// tutorial; the mirror showing what it can feel.
+function updateGhostHand(now) {
+  if (app.ghost) {
+    const gh = app.ghost;
+    if (app.gestures.active || app.state !== 'present' || app.spaceId) {
+      app.field.setHandLocal(null, 0, 0);
+      app.ghost = null;
+      return;
+    }
+    const p = clamp((now - gh.t0) / gh.dur, 0, 1);
+    const e = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;   // easeInOut
+    const x = gh.from.x + (gh.to.x - gh.from.x) * e;
+    const y = gh.from.y + (gh.to.y - gh.from.y) * e;
+    const strength = Math.sin(Math.PI * Math.min(1, p * 1.12)) * 0.85;
+    app.field.setHandLocal(x, y, strength);
+    if (p >= 1) { app.field.setHandLocal(null, 0, 0); app.ghost = null; }
+    return;
+  }
+  if (app.ghostPlayed || app.state !== 'present' || app.spaceId) return;
+  if (app.gestures.active || app.hands.failed) return;
+  if (!app.nodesShown || now - app.presentSince < 6000) return;
+  // reach for the node nearest to the form's centre
+  let best = null, bd = Infinity;
+  for (const n of NODES) {
+    const d = Math.hypot(n.anchor.x, n.anchor.y);
+    if (d < bd) { bd = d; best = n; }
+  }
+  if (!best) return;
+  app.ghostPlayed = true;
+  app.ghost = {
+    t0: now, dur: 2600,
+    from: { x: 0, y: -3.4 },
+    to: { x: best.anchor.x, y: best.anchor.y },
+  };
 }
 
 // quiet invitation: if nothing happens for a while, one node breathes once
