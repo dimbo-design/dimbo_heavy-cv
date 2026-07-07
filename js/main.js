@@ -768,7 +768,7 @@ function cancelDrag() {
 }
 
 // open-palm fling ⟷ flips; open-palm brush ↓ closes the current layer
-function onSwipe({ axis, dir, vx, vy, pure }) {
+function onSwipe({ axis, dir, vx, pure }) {
   // the zoomed photo is its own state (Dmitry's model): two hands rule the
   // scale, the fist or pinch carries the frame, the open palm resets —
   // flipping photos while zoomed-in is never what the moving hands mean
@@ -776,19 +776,13 @@ function onSwipe({ axis, dir, vx, vy, pure }) {
   if (axis === 'y') {
     if (app.lb) { if (dir === 'down') closeLightbox(); return; }
     if (!app.spaceId) return;
-    // the family split is LAW (Dmitry caught its violation before the field
-    // did): the palm owns only "onward" — DOWN belongs to the finger alone,
-    // because a palm given both directions can't tell its own return from a
-    // gesture. A gentle palm-down is silence (a return or an unclear wish —
-    // neither may cost the reader their place); only the decisive hurl
-    // still throws the page home to the title.
+    // the family split is LAW (Dmitry caught its violations twice, both
+    // before the field did): the palm owns exactly ONE direction — onward.
+    // Palm-down in a chapter means nothing at any speed: it is either the
+    // palm coming home or an unclear wish, and neither may move the page.
+    // Back = the finger snap or the pinch; home = a couple of pinch-flings.
     if (dir === 'up') {
       app.scroll.target = clamp(app.scroll.target + window.innerHeight * 0.6, 0, app.scroll.max);
-    } else if (app.scroll.y < 60) {
-      app.scroll.over = 70;                  // a spring: nothing above
-    } else if (Math.abs(vy || 0) > 2000) {
-      app.scroll.target = 0;                 // the hurl: fly home
-      app.scroll.vel = 0;
     }
     return;
   }
