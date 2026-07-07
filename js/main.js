@@ -744,13 +744,9 @@ function onSwipe({ axis, dir, vx, pure }) {
   }
   if (app.lb) { lightboxStep(dir === 'left' ? 1 : -1); return; }
   if (app.spaceId && app.gestures.active) {
-    // right-side chapters have no strips, so horizontal is theirs alone:
-    // any sideways brush closes them (a swing's recoil often registers
-    // as the opposite direction — both must count)
-    if (document.body.classList.contains('space-right')) {
-      if (pure) closeSpace();                 // a drifted pinch won't close
-      return;
-    }
+    // sideways-close for right chapters was tried and field-rejected: it
+    // fired one attempt in four ("случайность, а не правило") — closing
+    // lives on the cross, Esc, the click-out and walking away
     const s = hitStrip(app.gestures.cursor.x, app.gestures.cursor.y);
     if (s) s.vel = vx * 0.9;
   }

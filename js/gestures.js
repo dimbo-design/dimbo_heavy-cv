@@ -51,6 +51,7 @@ export class Gestures extends EventTarget {
     // While momentum is warm, opposite strokes are returns by default; only a
     // decisively stronger stroke or a pause changes the direction of reading.
     this._mom = { x: null, y: null };   // {dir, vel, until}
+    this._palmMom = null;               // recent palm-up energy guards "home"
   }
 
   // main reports whether a flick actually moved content. A stroke that met
@@ -350,12 +351,23 @@ export class Gestures extends EventTarget {
       } else if (pure &&
           Math.abs(dy) > window.innerHeight * 0.18 &&
           Math.abs(dy) > Math.abs(dx) * 1.6 && Math.abs(v.vy) > 1250) {
-        this._swipeCooldownUntil = now + 900;
-        this._fistCooldownUntil = Math.max(this._fistCooldownUntil, now + 700);
-        this._flickHoldUntil = Math.max(this._flickHoldUntil, now + 700);
-        this._samples.length = 0;
-        this._relSamples.length = 0;
-        this._emit('swipe', { axis: 'y', dir: dy > 0 ? 'down' : 'up', vy: v.vy, pure: true });
+        // the palm family holds two directions, so the old collision lives
+        // here too: an up-stroke's return drifts down and can read pure.
+        // "Home" is destructive (you lose your place) — within 3s of
+        // advancing it must out-shout the up-strokes to count
+        const pm = this._palmMom;
+        if (dy > 0 && pm && now < pm.until &&
+            Math.abs(v.vy) < Math.max(1700, pm.vel * 1.55)) {
+          this._samples.length = 0;          // the palm coming home, not a call
+        } else {
+          this._palmMom = dy < 0 ? { vel: Math.abs(v.vy), until: now + 3000 } : null;
+          this._swipeCooldownUntil = now + 900;
+          this._fistCooldownUntil = Math.max(this._fistCooldownUntil, now + 700);
+          this._flickHoldUntil = Math.max(this._flickHoldUntil, now + 700);
+          this._samples.length = 0;
+          this._relSamples.length = 0;
+          this._emit('swipe', { axis: 'y', dir: dy > 0 ? 'down' : 'up', vy: v.vy, pure: true });
+        }
       }
     }
   }
