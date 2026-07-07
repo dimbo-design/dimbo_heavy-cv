@@ -374,8 +374,9 @@ body.space-open .blk {
    the title (within the hand's reach); label + fill bar bloom on focus */
 #space-close {
   position: absolute; z-index: 5;
+  /* top/left are set from the title's real first line in JS */
   top: calc(15vh + 22px);
-  left: calc(7.5vw + min(46vw, 640px) + 48px);
+  left: calc(7.5vw + min(46vw, 640px) + 20px);
   display: flex; flex-direction: column; align-items: center; gap: 6px;
   opacity: 0; pointer-events: none;
   transition: opacity 0.7s var(--ease) 0.4s;
@@ -386,20 +387,23 @@ body.space-open .blk {
   background: radial-gradient(ellipse, rgba(10, 10, 13, 0.75), transparent 72%);
   filter: blur(4px);
 }
-body.space-open #space-close { opacity: 0.6; pointer-events: auto; }
+body.space-open #space-close { opacity: 0.38; pointer-events: auto; }
 body.space-open #space-close:hover,
 body.space-open #space-close.focus { opacity: 1; }
 body.space-right #space-close {
   left: auto; right: calc(7.5vw + min(46vw, 640px) + 48px);
 }
 #space-close svg {
-  width: clamp(30px, 2.9vw, 46px); height: clamp(30px, 2.9vw, 46px);
+  width: var(--cross, clamp(30px, 2.9vw, 46px));
+  height: var(--cross, clamp(30px, 2.9vw, 46px));
   overflow: visible;
   transition: transform 0.45s var(--ease);
 }
 #space-close svg line {
-  stroke: var(--ink); stroke-width: 2.4; stroke-linecap: round;
+  stroke: var(--ink-dim); stroke-width: 1.3; stroke-linecap: round;
+  transition: stroke 0.3s;
 }
+#space-close:hover svg line, #space-close.focus svg line { stroke: var(--ink); }
 #space-close:hover svg, #space-close.focus svg { transform: scale(1.1) rotate(90deg); }
 #space-close .n-label {
   font-family: var(--mono); font-size: 11px; letter-spacing: 0.18em;
