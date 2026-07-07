@@ -84,7 +84,9 @@ export class HandsEngine extends EventTarget {
 // Compact geometry: palm centre, hand size, pinch distance, openness, pointing.
 // Coordinates normalized to the frame, x NOT yet mirrored.
 function summarize(lm) {
-  const d = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  // 3D distances: a hand turned sideways foreshortens in 2D and fakes
+  // pinches — the z MediaPipe gives is enough to make grab/release honest
+  const d = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, (a.z || 0) - (b.z || 0));
   const palm = avg(lm, [0, 5, 9, 13, 17]);
   const size = d(lm[0], lm[9]) + 1e-6;
   const pinch = d(lm[4], lm[8]) / size;
@@ -102,7 +104,7 @@ function summarize(lm) {
 }
 
 function avg(lm, idx) {
-  let x = 0, y = 0;
-  for (const i of idx) { x += lm[i].x; y += lm[i].y; }
-  return { x: x / idx.length, y: y / idx.length };
+  let x = 0, y = 0, z = 0;
+  for (const i of idx) { x += lm[i].x; y += lm[i].y; z += lm[i].z || 0; }
+  return { x: x / idx.length, y: y / idx.length, z: z / idx.length };
 }

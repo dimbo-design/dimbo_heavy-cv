@@ -169,6 +169,7 @@ body.named #identity { opacity: 1; transform: none; }
 }
 .node.shown { opacity: 0.72; }
 .node .n-label {
+  transition: transform 0.45s var(--ease), color 0.45s;
   font-family: var(--mono); font-size: 13px; letter-spacing: 0.16em;
   color: var(--ink); white-space: nowrap;
   padding: 2px 0;
@@ -189,13 +190,26 @@ body.named #identity { opacity: 1; transform: none; }
   filter: blur(4px);
 }
 .node .n-bar {
-  display: block; height: 2px; width: 100%;
-  margin-top: 1px;
+  display: block; height: 3px; width: 100%;
+  margin-top: 2px;
+  background: rgba(232, 228, 218, 0.18);
+  opacity: 0; transition: opacity 0.35s;
+  overflow: hidden;
+}
+.node.focus .n-bar { opacity: 1; }
+.node .n-fill {
+  display: block; height: 100%; width: 100%;
   background: var(--ink);
   transform: scaleX(0); transform-origin: left center;
-  opacity: 0.85;
 }
 .node.focus { opacity: 1; }
+.node .n-label { transform-origin: left bottom; }
+.node.focus .n-label {
+  color: #fff;
+  transform: scale(1.12);
+  text-shadow: 0 0 14px rgba(10, 10, 13, 1), 0 0 30px rgba(232, 228, 218, 0.25);
+}
+.node.focus::before { opacity: 1.6; }
 .node.pulse .n-label { animation: nodepulse 1.5s var(--ease); }
 @keyframes nodepulse {
   0%, 100% { letter-spacing: 0.16em; opacity: 1; }

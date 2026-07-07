@@ -149,6 +149,9 @@ const app = {
 };
 
 window.__app = app;   // debug / integration-test hook
+if (new URLSearchParams(location.search).has('debug')) {
+  addEventListener('DOMContentLoaded', () => $('debug')?.classList.remove('hidden'));
+}
 
 if (isMobile) {
   document.body.classList.add('is-mobile');
@@ -231,7 +234,7 @@ function boot() {
     if (e.key === 'Escape') { if (app.lb) closeLightbox(); else closeSpace(); }
     if (app.lb && e.key === 'ArrowRight') lightboxStep(1);
     if (app.lb && e.key === 'ArrowLeft') lightboxStep(-1);
-    if (e.key === 'd' && e.altKey) $('debug').classList.toggle('hidden');
+    if (e.code === 'KeyD' && (e.altKey || e.ctrlKey)) $('debug').classList.toggle('hidden');
   });
   document.addEventListener('click', (e) => {
     if (app.lb) {
@@ -327,7 +330,7 @@ function buildNodes() {
     const el = document.createElement('button');
     el.className = 'node';
     el.dataset.id = n.id;
-    el.innerHTML = `<span class="n-label"></span><i class="n-bar"></i><span class="n-sub"></span>`;
+    el.innerHTML = `<span class="n-label"></span><i class="n-bar"><i class="n-fill"></i></i><span class="n-sub"></span>`;
     el.addEventListener('click', () => openSpace(n.id));
     wrap.appendChild(el);
   }
@@ -421,9 +424,9 @@ function onGrabStart({ x, y }) {
     // axis lock: horizontal over a strip drags the strip; horizontal on
     // text grabs the whole chapter (throw it to close); vertical scrolls
     app.drag = { kind: 'pending', strip: hitStrip(x, y), accX: 0, accY: 0 };
-  } else if (app.state === 'present') {
-    app.drag = { kind: 'stir' };
   }
+  // grabbing on the main screen deliberately does nothing:
+  // the mirror is a mirror, not a knob
 }
 
 function onGrabMove({ dx, dy }) {
@@ -475,10 +478,10 @@ function onGrabMove({ dx, dy }) {
   } else if (d.kind === 'strip') {
     moveStrip(d.strip, dx);
   } else if (d.kind === 'scroll') {
-    app.scroll.target = clamp(app.scroll.target - dy, 0, app.scroll.max);
+    // dead-zone kills tracking tremor; the cap kills single-frame jumps
+    const step = Math.abs(dy) < 1.5 ? 0 : clamp(dy, -70, 70);
+    app.scroll.target = clamp(app.scroll.target - step, 0, app.scroll.max);
     app.scroll.vel = 0;
-  } else if (d.kind === 'stir') {
-    app.field.addStir(dx, dy);
   }
 }
 
@@ -732,15 +735,11 @@ function loopBody(t) {
     if (app.state === 'present') {
       const handActive = gestures.active;
       app.pointer = handActive ? reflectionPointer() : null;
-      // the scene turns with the head only — slow and stable;
-      // the hand moves nothing but its own small ring
+      // the scene does not turn. period — stability beat liveliness
       const headX = clamp((signals.cx - 0.5) * 2 * CONFIG.focus.gain, -1.6, 1.6);
-      field.setGaze(headX * 0.35, signals.cy);
       const nodesDelay = returning ? CONFIG.reveal.nodesMs * 0.45 : CONFIG.reveal.nodesMs;
       if (!app.nodesShown && t - app.presentSince > nodesDelay) revealNodes();
       if (app.nodesShown && !app.spaceId) updateNodes(headX, handActive);
-    } else {
-      field.setGaze(Math.sin(t * 0.00013) * 0.25, 0.5);
     }
 
     field.frame(dt * (lowPower ? 2 : 1));
@@ -864,11 +863,11 @@ function updateHold(dt, now) {
 function renderHoldBar() {
   const active = app.hold.target?.startsWith('node:') ? app.hold.target.slice(5) : null;
   for (const el of document.querySelectorAll('.node')) {
-    const bar = el.querySelector('.n-bar');
-    if (!bar) continue;
+    const fill = el.querySelector('.n-fill');
+    if (!fill) continue;
     const pct = el.dataset.id === active
       ? clamp((app.hold.p - 0.4) / 0.6, 0, 1) : 0;
-    bar.style.transform = `scaleX(${pct})`;
+    fill.style.transform = `scaleX(${pct})`;
   }
 }
 

@@ -50,10 +50,17 @@ export class Gestures extends EventTarget {
       this._emit('enter', {});
     }
 
-    // ---- grab state: pinch only ("grab the air"); a relaxed hand must stay free
+    // ---- grab state: pinch only ("grab the air"); a relaxed hand must stay
+    // free. Two consecutive frames confirm both engage and release — single
+    // noisy frames must not grab or drop what you're holding.
     const wasGrabbing = this.grabbing;
-    if (!this._pinched && h.pinch < 0.32) this._pinched = true;
-    else if (this._pinched && h.pinch > 0.46) this._pinched = false;
+    if (!this._pinched) {
+      this._pinchIn = h.pinch < 0.30 ? (this._pinchIn || 0) + 1 : 0;
+      if (this._pinchIn >= 2) { this._pinched = true; this._pinchOut = 0; }
+    } else {
+      this._pinchOut = h.pinch > 0.48 ? (this._pinchOut || 0) + 1 : 0;
+      if (this._pinchOut >= 2) { this._pinched = false; this._pinchIn = 0; }
+    }
     this.pinchStrength = clamp((0.55 - h.pinch) / 0.35, 0, 1);
     this.grabbing = this._pinched;
 
