@@ -244,7 +244,15 @@ export class Gestures extends EventTarget {
     // for a frame or two — so fist acts demand a SLOW hand and two frames.
     // A real clench is done with a steady hand; a brush never is.
     if (!this._pinched && now > this._fistCooldownUntil && this.speed < 700) {
-      const closing = h.open < 0.72 && this._openSlow - h.open > 0.35;
+      // a real clench assembles from the WHOLE open palm at once; a hand
+      // relaxing after a swipe curls finger by finger, and the last fold
+      // used to complete the "fist" and open a photo (field log: clench
+      // 1.5-2.5s after every palm swipe, thumb still out). The history
+      // gate is Dmitry's description verbatim: 400ms ago the palm was
+      // honestly open, and it fell all the way from there.
+      const r0o = this._relSamples.length > 3 ? this._relSamples[0].o : 0;
+      const closing = h.open < 0.72 && this._openSlow - h.open > 0.35 &&
+        r0o > 0.95 && r0o - h.open > 0.5;
       const opening = h.open > 1.28 && h.open - this._openSlow > 0.35;
       this._fistIn = closing ? (this._fistIn || 0) + 1 : 0;
       this._fistOut = opening ? (this._fistOut || 0) + 1 : 0;
@@ -382,7 +390,7 @@ export class Gestures extends EventTarget {
           if (axis === 'x') this._mom.x = { dir, vel, until: now + 2600 };
           this._swipeCooldownUntil = Math.max(this._swipeCooldownUntil, now + 800);
           this._fistCooldownUntil = Math.max(this._fistCooldownUntil, now + 700);
-          this._pinchBlockUntil = now + 450;
+          this._pinchBlockUntil = now + 600;
           this._emit('flick', { axis, dir, vel });
         }
       }
