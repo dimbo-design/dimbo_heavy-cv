@@ -768,7 +768,7 @@ function cancelDrag() {
 }
 
 // open-palm fling ⟷ flips; open-palm brush ↓ closes the current layer
-function onSwipe({ axis, dir, vx, pure }) {
+function onSwipe({ axis, dir, vx, vy, pure }) {
   // the zoomed photo is its own state (Dmitry's model): two hands rule the
   // scale, the fist or pinch carries the frame, the open palm resets —
   // flipping photos while zoomed-in is never what the moving hands mean
@@ -776,18 +776,19 @@ function onSwipe({ axis, dir, vx, pure }) {
   if (axis === 'y') {
     if (app.lb) { if (dir === 'down') closeLightbox(); return; }
     if (!app.spaceId) return;
-    // everyone's first instinct: waving the palm vertically to scroll.
-    // It scrolls. Waving down when already at the top throws the page away.
-    // swipes only ever scroll — closing lives on the explicit target
-    // (the industry learned this the hard way: swipe recoil reads as the
-    // opposite swipe, and Dmitry's log looped exactly that way)
+    // the sheet, both ways (Dmitry reads bidirectionally — field-corrected):
+    // palm up pushes the sheet up, palm down brings it back a step. Only a
+    // decisive hurl still throws the page home to the title — a gentle
+    // brush must never cost the reader their place.
     if (dir === 'up') {
       app.scroll.target = clamp(app.scroll.target + window.innerHeight * 0.6, 0, app.scroll.max);
     } else if (app.scroll.y < 60) {
       app.scroll.over = 70;                  // a spring: nothing above
-    } else {
-      app.scroll.target = 0;
+    } else if (Math.abs(vy || 0) > 2000) {
+      app.scroll.target = 0;                 // the hurl: fly home
       app.scroll.vel = 0;
+    } else {
+      app.scroll.target = clamp(app.scroll.target - window.innerHeight * 0.6, 0, app.scroll.max);
     }
     return;
   }

@@ -427,18 +427,21 @@ export class Gestures extends EventTarget {
       } else if (pure &&
           Math.abs(dy) > window.innerHeight * 0.18 &&
           Math.abs(dy) > Math.abs(dx) * 1.6 && Math.abs(v.vy) > 1250) {
-        // the palm family holds two directions, so the old collision lives
-        // here too: an up-stroke's return drifts down and can read pure.
-        // "Home" is destructive (you lose your place) — within 3s of
-        // advancing it must out-shout the up-strokes to count
+        // the palm family holds two directions and Dmitry reads BOTH ways —
+        // so the return-guard window is short and soft: right after an
+        // up-stroke a downward drift is the palm coming home; past ~2.2s a
+        // down-stroke is a deliberate step back and rides free
         const pm = this._palmMom;
         if (dy > 0 && pm && now < pm.until &&
-            Math.abs(v.vy) < Math.max(1700, pm.vel * 1.55)) {
+            Math.abs(v.vy) < Math.max(1700, pm.vel * 1.45)) {
           this._samples.length = 0;          // the palm coming home, not a call
         } else {
-          this._palmMom = dy < 0 ? { vel: Math.abs(v.vy), until: now + 3000 } : null;
+          this._palmMom = dy < 0 ? { vel: Math.abs(v.vy), until: now + 2200 } : null;
           this._swipeCooldownUntil = now + 900;
-          this._fistCooldownUntil = Math.max(this._fistCooldownUntil, now + 700);
+          // the hand relaxing after a palm swipe folds finger by finger and
+          // completes a "fist" a second later (field: photo opened twice) —
+          // the fist listens again only after the hand has truly settled
+          this._fistCooldownUntil = Math.max(this._fistCooldownUntil, now + 1500);
           this._flickHoldUntil = Math.max(this._flickHoldUntil, now + 700);
           this._samples.length = 0;
           this._relSamples.length = 0;
