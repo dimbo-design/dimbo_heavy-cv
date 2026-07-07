@@ -37,7 +37,7 @@ export class Gestures extends EventTarget {
     this.spreadEnabled = false;   // main enables it inside the lightbox only
 
     this._relSamples = [];        // fingertip minus palm — the lazy-finger signal
-    this._relSpeed = 0;
+    this._relDisp = 0;
     this._flickHoldUntil = 0;
     this._flickOppUntil = 0;
     this._flickOppDir = '';
@@ -101,18 +101,22 @@ export class Gestures extends EventTarget {
 
     // ---- fingertip motion RELATIVE to the palm — the lazy-finger signal.
     // A parked hand with a working index finger shows up here and almost
-    // nowhere else. The rel-speed also guards pinch-engage below: a fingertip
-    // mid-sweep dips through the pinch thresholds on its way (Dmitry's traces
-    // show 0.24 at the bottom of a flick) and must not read as a grab.
+    // nowhere else. The rel-displacement also guards pinch-engage below: a
+    // fingertip mid-sweep dips through the pinch thresholds on its way
+    // (Dmitry's traces show 0.24 at the bottom of a flick) and must not grab.
+    // Displacement over ~130ms, NOT instantaneous speed: a pointing finger's
+    // landmarks jitter (field log: node selection went dead), and jitter sums
+    // to nothing over a window while a real stroke covers honest distance.
     const rel = { x: h.index.x - h.palm.x, y: h.index.y - h.palm.y };
-    if (this._relPrev) {
-      const rdt = Math.max(16, now - this._relPrevT) / 1000;
-      const rv = Math.hypot(rel.x - this._relPrev.x, rel.y - this._relPrev.y) / rdt;
-      this._relSpeed += (rv - this._relSpeed) * 0.5;
-    }
-    this._relPrev = rel; this._relPrevT = now;
     this._relSamples.push({ rx: rel.x, ry: rel.y, o: h.open, t: now });
     while (this._relSamples.length && now - this._relSamples[0].t > 420) this._relSamples.shift();
+    this._relDisp = 0;
+    for (let i = this._relSamples.length - 1; i >= 0; i--) {
+      if (now - this._relSamples[i].t >= 130) {
+        this._relDisp = Math.hypot(rel.x - this._relSamples[i].rx, rel.y - this._relSamples[i].ry);
+        break;
+      }
+    }
 
     // ---- grab: recognized as the ACT of pinching. A slow-moving baseline
     // remembers how far apart the fingers usually are; engaging requires the
@@ -122,7 +126,7 @@ export class Gestures extends EventTarget {
     const wasGrabbing = this.grabbing;
     if (!this._pinched) {
       // a collapsing fist is not a pinch; neither is a fingertip mid-flick
-      const fingersOut = h.open > 0.85 && this._relSpeed < 1.0;
+      const fingersOut = h.open > 0.85 && this._relDisp < 0.09;
       const closingAct = fingersOut && h.pinch < 0.28 && this._pinchSlow - h.pinch > 0.10;
       const hardAct = fingersOut && h.pinch < 0.22 && this._pinchSlow - h.pinch > 0.18;
       this._pinchIn = closingAct ? (this._pinchIn || 0) + 1 : 0;
@@ -274,7 +278,9 @@ export class Gestures extends EventTarget {
         this._flickHoldUntil = now + 340;  // same direction may repeat quickly
         this._flickOppDir = axis === 'y' ? (dir === 'down' ? 'up' : 'down')
           : (dir === 'left' ? 'right' : 'left');
-        this._flickOppUntil = now + 1600;  // its recoil may not answer back
+        // vertical recoils are already killed by the extension gate, so ↕ may
+        // change its mind quickly; ⟷ has no such shield and keeps the long block
+        this._flickOppUntil = now + (axis === 'y' ? 450 : 1600);
         if (axis === 'x') {
           this._swipeOppDir = this._flickOppDir;
           this._swipeOppUntil = now + 1600;
@@ -333,8 +339,7 @@ export class Gestures extends EventTarget {
     this._hasCursor = false;
     this._samples.length = 0;
     this._relSamples.length = 0;
-    this._relPrev = null;
-    this._relSpeed = 0;
+    this._relDisp = 0;
     this._emit('leave', {});
   }
 
