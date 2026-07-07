@@ -17,6 +17,7 @@ export const NODES = [
           { p: '10+ лет в цифровых продуктах. Старший продуктовый дизайнер в маркетплейсах KazanExpress и Uzum, сейчас — фаундер инди-студии MythHand.' },
           { h: 'подход', p: 'Предпочитаю живые исследования вместо массовой аналитики. Прототипы в реальной среде — на компонентах дизайн-системы или vibecoded, а не в prototype-симуляторах.' },
           { h: 'цикл', p: 'Контекст — бизнес, пользователи, разработка → прототипирование → дизайн → сопровождение разработки → оценка результата метриками.' },
+          { h: 'инструменты', p: 'Figma, FigJam, Miro, Jira, Notion, Claude Code, Grok.' },
           { aside: 'Эта страница — тоже метод: интерфейс, который замечает присутствие раньше, чем вы успеваете кликнуть. Вся обработка идёт на вашем устройстве.' },
         ],
       },
@@ -28,6 +29,7 @@ export const NODES = [
           { p: '10+ years in digital products. Senior product designer at the KazanExpress and Uzum marketplaces, now the founder of the MythHand indie studio.' },
           { h: 'approach', p: 'I prefer live field research over mass analytics. Prototypes live in the real environment — built on design-system components or vibecoded, not in prototype simulators.' },
           { h: 'cycle', p: 'Context — business, users, engineering → prototyping → design → shipping alongside the team → measuring the result with metrics.' },
+          { h: 'tools', p: 'Figma, FigJam, Miro, Jira, Notion, Claude Code, Grok.' },
           { aside: 'This page is the method too: an interface that notices presence before you get to click. Everything runs on your device.' },
         ],
       },
@@ -36,13 +38,13 @@ export const NODES = [
   {
     id: 'warehouse',
     pose: { x: 0.46, rotY: -0.52, scale: 0.9, dim: 0 },
-    anchor: { x: 3.7, y: 1.4, z: 3.0 },
+    anchor: { x: 3.7, y: 2.1, z: 3.0 },
     label: { ru: 'склад ke × uzum', en: 'warehouse ke × uzum' },
     sub:   { ru: 'sla 72 → 100', en: 'sla 72 → 100' },
     panel: {
       ru: {
-        kicker: 'кейс · kazanexpress × uzum',
-        title: 'Приёмка склада: от вопроса про стол — до пересборки процесса',
+        kicker: 'кейс · kazanexpress × uzum · 2021–2024',
+        title: 'Склад: от вопроса про стол — до системы на две компании',
         blocks: [
           { metrics: [
             ['72% → 100%', 'SLA при кратном росте трафика SKU'],
@@ -58,11 +60,15 @@ export const NODES = [
           ]},
           { h: 'решение', p: 'Интерфейс под физическую реальность склада: scan-first, без клавиатуры как основного ввода. Поля шаблонизированы с учётом всех зависимостей и развилок — интерфейс разворачивается пошагово, формируя страницу, по которой можно вернуться к любому шагу без потери контекста. Всё — без расширения штата.' },
           { h: 'продолжение · топология', p: 'Следом спроектировал систему управления топологией склада: полная картина перестановок, блокировок и наполнения ячеек взамен Excel-таблиц. После приобретения KazanExpress Магнитом этот подход лёг в основу топологии склада Магнит Маркета.' },
+          { h: 'продолжение · uzum', p: 'В 2024 та же линия продолжилась в Uzum — фактически одна команда и один проект, просто на две компании: система склада и ПВЗ маркетплейса Узбекистана. Параллельно временно закрывал позицию дизайн-лида команды — найм, онбординг, ревью работ — и внедрил формат персональных дизайн-спринтов между дизайнером и его кросс-функциональным кластером.' },
+          { strip: [
+            ['assets/gallery/uzum-flow.jpg', 'uzum — флоу приложения сотрудника склада'],
+          ]},
         ],
       },
       en: {
-        kicker: 'case · kazanexpress × uzum',
-        title: 'Warehouse inbound: from a question about a desk to rebuilding the process',
+        kicker: 'case · kazanexpress × uzum · 2021–2024',
+        title: 'The warehouse: from a question about a desk to a system spanning two companies',
         blocks: [
           { metrics: [
             ['72% → 100%', 'SLA under multiplying SKU traffic'],
@@ -78,6 +84,10 @@ export const NODES = [
           ]},
           { h: 'solution', p: 'An interface designed for the physical reality of the floor: scan-first, no keyboard as primary input. Fields are templated around every dependency and branch — the interface unfolds step by step into a page you can walk back through without losing context. All of it without growing the headcount.' },
           { h: 'follow-up · topology', p: 'Next I designed the warehouse topology management system: a full picture of moves, blocks and cell occupancy instead of Excel sheets. After Magnit acquired KazanExpress, this approach became the foundation of Magnit Market’s warehouse topology.' },
+          { h: 'follow-up · uzum', p: 'In 2024 the same line continued at Uzum — effectively one team and one project across two companies: the warehouse and pick-up point system of Uzbekistan’s marketplace. In parallel I temporarily covered the team’s design lead position — hiring, onboarding, reviews — and introduced personal design sprints between a designer and their cross-functional cluster.' },
+          { strip: [
+            ['assets/gallery/uzum-flow.jpg', 'uzum — the warehouse worker app flow'],
+          ]},
         ],
       },
     },
@@ -139,7 +149,11 @@ export const NODES = [
             ['assets/gallery/radio-widget.jpg', 'виджет радио — in progress'],
           ]},
           { p: 'MythHand Radio — веб-радио вселенной студии, спроектировано и собрано в одиночку: design & vibecode, от канона золотой сетки до работающего MVP. Рядом — веб-инструмент для танцорской импровизации с физическими дайсами, готовится к публичному запуску.' },
-          { links: [['https://mythhand.com/', 'mythhand.com ↗']] },
+          { h: 'release p2p — в открытую', p: 'Настолка возвращается в цифру: P2P-веб-адаптация собственной «Release любой ценой» в открытой разработке. Монорепозиторий с UI-китом и плейграундом компонентов, впереди мультиплеер поверх WebRTC. Тот же метод в третий раз: design & vibecode.' },
+          { links: [
+            ['https://mythhand.com/', 'mythhand.com ↗'],
+            ['https://github.com/MythHand/ReleaseBoardGameP2P', 'github — release p2p ↗'],
+          ] },
         ],
       },
       en: {
@@ -153,38 +167,11 @@ export const NODES = [
             ['assets/gallery/radio-widget.jpg', 'the radio widget — in progress'],
           ]},
           { p: 'MythHand Radio is the web radio of the studio’s universe, designed and built solo: design & vibecode, from a golden-grid canon to a working MVP. Next to it — a web tool for dance improvisation with physical dice, preparing for public launch.' },
-          { links: [['https://mythhand.com/', 'mythhand.com ↗']] },
-        ],
-      },
-    },
-  },
-  {
-    id: 'uzum',
-    pose: { x: 0.5, rotY: -0.36, scale: 0.85, dim: 0.1 },
-    anchor: { x: 3.3, y: 2.7, z: 1.4 },
-    label: { ru: 'склад uzum', en: 'uzum warehouse' },
-    sub:   { ru: 'система склада · пвз', en: 'warehouse system' },
-    panel: {
-      ru: {
-        kicker: 'кейс · uzum · 2024',
-        title: 'Система склада маркетплейса Uzum',
-        blocks: [
-          { p: 'Продуктовый дизайн системы склада и ПВЗ — операционные интерфейсы на стыке цифрового и физического, продолжение подхода, который дал 100% SLA на приёмке KazanExpress.' },
-          { strip: [
-            ['assets/gallery/uzum-flow.jpg', 'флоу приложения сотрудника склада'],
-          ]},
-          { p: 'Параллельно временно закрывал позицию дизайн-лида команды: найм, онбординг, ревью работ. Внедрил формат персональных дизайн-спринтов между дизайнером и его кросс-функциональным кластером.' },
-        ],
-      },
-      en: {
-        kicker: 'case · uzum · 2024',
-        title: 'Uzum marketplace warehouse system',
-        blocks: [
-          { p: 'Product design of the warehouse and pick-up point system — operational interfaces where digital meets physical, continuing the approach that took KazanExpress inbound to 100% SLA.' },
-          { strip: [
-            ['assets/gallery/uzum-flow.jpg', 'the warehouse worker app flow'],
-          ]},
-          { p: 'In parallel I temporarily covered the team’s design lead position: hiring, onboarding, design reviews. Introduced personal design sprints between a designer and their cross-functional cluster.' },
+          { h: 'release p2p — in the open', p: 'The board game returns to the digital: a P2P web adaptation of my own “Release at Any Cost”, developed in the open. A monorepo with a UI kit and a component playground, multiplayer over WebRTC ahead. The same method for the third time: design & vibecode.' },
+          { links: [
+            ['https://mythhand.com/', 'mythhand.com ↗'],
+            ['https://github.com/MythHand/ReleaseBoardGameP2P', 'github — release p2p ↗'],
+          ] },
         ],
       },
     },
@@ -208,6 +195,7 @@ export const NODES = [
             ['февраль 2020 — апрель 2021', 'UX-дизайнер', 'Direct Line · проекты для клиентов из США и РФ'],
             ['до 2020', 'Дизайн в продуктах и студиях', 'Invite taxi, AIRA Lab, AdEcoSystem и другие · Тольятти'],
           ]},
+          { h: 'образование', p: 'Поволжский государственный университет сервиса — бакалавр, «Информационные системы», 2018. Нетология (2016–2017): UX-дизайн, веб-дизайн, дизайн мобильных приложений.' },
           { links: [['assets/Product_Design_Dmitry_Togulev.pdf', 'резюме, pdf ↗']] },
         ],
       },
@@ -223,6 +211,7 @@ export const NODES = [
             ['february 2020 — april 2021', 'UX Designer', 'Direct Line · projects for US and RU clients'],
             ['before 2020', 'Design across products and studios', 'Invite taxi, AIRA Lab, AdEcoSystem and others · Togliatti'],
           ]},
+          { h: 'education', p: 'Volga Region State University of Service — BSc, Information Systems, 2018. Netology (2016–2017): UX design, web design, mobile app design.' },
           { links: [['assets/Product_Design_Dmitry_Togulev.pdf', 'résumé, pdf ↗']] },
         ],
       },
