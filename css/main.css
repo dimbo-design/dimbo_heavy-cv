@@ -366,14 +366,15 @@ body.space-open .blk {
 /* thin position hint: flares up the moment the text is gripped */
 #scroll-hint {
   position: absolute; top: 15vh; bottom: 18vh; width: 2px;
-  left: calc(7.5vw + min(46vw, 640px) + 22px);
+  left: calc(7.5vw - 26px);            /* outer edge — never under the photos */
   background: rgba(232, 228, 218, 0.08);
   opacity: 0; transition: opacity 0.3s;
   pointer-events: none;
 }
 body.space-right #scroll-hint {
-  left: auto; right: calc(7.5vw + min(46vw, 640px) + 22px);
+  left: auto; right: calc(7.5vw - 26px);
 }
+#scroll-hint.full i { opacity: 0.3; }   /* whole chapter fits — nothing to scroll */
 #scroll-hint.on { opacity: 1; }
 #scroll-hint i {
   position: absolute; left: 0; width: 100%;

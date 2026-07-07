@@ -1033,15 +1033,16 @@ function updateSpacePhysics(dt) {
   if (hint) {
     const busy = document.body.classList.contains('gripping') ||
       Math.abs(app.scroll.vel) > 40 || app.scroll.over !== 0;
-    hint.classList.toggle('on', busy && app.scroll.max > 0);
-    if (app.scroll.max > 0) {
-      const frac = window.innerHeight / (inner.scrollHeight || 1);
-      const th = Math.max(0.08, Math.min(1, frac));
-      const pos = app.scroll.y / app.scroll.max;
-      const bar = hint.firstElementChild;
-      bar.style.height = `${th * 100}%`;
-      bar.style.top = `${pos * (1 - th) * 100}%`;
-    }
+    // shown even when there is nothing to scroll: a full, dim bar says
+    // "the whole chapter is already on screen" instead of saying nothing
+    hint.classList.toggle('on', busy);
+    hint.classList.toggle('full', app.scroll.max <= 0);
+    const frac = window.innerHeight / (inner.scrollHeight || 1);
+    const th = Math.max(0.08, Math.min(1, frac));
+    const pos = app.scroll.max > 0 ? app.scroll.y / app.scroll.max : 0;
+    const bar = hint.firstElementChild;
+    bar.style.height = `${th * 100}%`;
+    bar.style.top = `${pos * (1 - th) * 100}%`;
   }
 
   for (const s of app.strips) {
