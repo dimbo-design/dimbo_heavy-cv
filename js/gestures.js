@@ -39,10 +39,12 @@ export class Gestures extends EventTarget {
     this._relSamples = [];        // fingertip minus palm — the lazy-finger signal
     this._relDisp = 0;
     this._flickHoldUntil = 0;
-    this._flickOppUntil = 0;
-    this._flickOppDir = '';
-    this._swipeOppUntil = 0;      // a sideways stroke's recoil may not answer back
-    this._swipeOppDir = '';
+    // READING DIRECTION per axis (kinetic-scroll practice): in the air the
+    // finger's trip home IS the opposite gesture — no glass to lift off from,
+    // so per-stroke guessing is impossible (Dmitry nailed this in the field).
+    // While momentum is warm, opposite strokes are returns by default; only a
+    // decisively stronger stroke or a pause changes the direction of reading.
+    this._mom = { x: null, y: null };   // {dir, vel, until}
   }
 
   // grab held without movement — the deliberate "close" charge in main
@@ -269,25 +271,21 @@ export class Gestures extends EventTarget {
         axis = 'x'; dir = drx < 0 ? 'right' : 'left';   // frame x is mirrored
         vel = (Math.abs(drx) * window.innerWidth * this.gain) / rdt;
       }
-      // an opposite stroke soon after reads as the hand coming home — unless
-      // it's decisively fast (a real reversal cuts through the block)
-      const flickBlocked = dir === this._flickOppDir && now < this._flickOppUntil && vel < 1700;
-      if (axis && !flickBlocked) {
-        this._relSamples.length = 0;
-        this._samples.length = 0;          // the same stroke is not also a palm swipe
-        this._flickHoldUntil = now + 340;  // same direction may repeat quickly
-        this._flickOppDir = axis === 'y' ? (dir === 'down' ? 'up' : 'down')
-          : (dir === 'left' ? 'right' : 'left');
-        // vertical recoils are already killed by the extension gate, so ↕ may
-        // change its mind quickly; ⟷ has no such shield and keeps the long block
-        this._flickOppUntil = now + (axis === 'y' ? 450 : 1600);
-        if (axis === 'x') {
-          this._swipeOppDir = this._flickOppDir;
-          this._swipeOppUntil = now + 1600;
+      if (axis) {
+        const m = this._mom[axis];
+        const reversal = m && dir !== m.dir && now < m.until;
+        if (reversal && vel < Math.max(axis === 'y' ? 1000 : 1600, m.vel * 1.55)) {
+          // the finger going home for the next stroke — consume it silently
+          this._relSamples.length = 0;
+        } else {
+          this._relSamples.length = 0;
+          this._samples.length = 0;        // the same stroke is not also a palm swipe
+          this._flickHoldUntil = now + 340; // same direction may repeat quickly
+          this._mom[axis] = { dir, vel, until: now + 2600 };
+          this._swipeCooldownUntil = Math.max(this._swipeCooldownUntil, now + 800);
+          this._fistCooldownUntil = Math.max(this._fistCooldownUntil, now + 700);
+          this._emit('flick', { axis, dir, vel });
         }
-        this._swipeCooldownUntil = Math.max(this._swipeCooldownUntil, now + 800);
-        this._fistCooldownUntil = Math.max(this._fistCooldownUntil, now + 700);
-        this._emit('flick', { axis, dir, vel });
       }
     }
 
@@ -301,21 +299,19 @@ export class Gestures extends EventTarget {
       const dy = this.cursor.y - s0.y;
       const v = this._velocity();
       const pure = this._samples.every((s) => s.o > 1.05 && s.p > 0.45);
+      const sdir = dx > 0 ? 'right' : 'left';
+      const sm = this._mom.x;   // swipes share the reading direction with flicks
+      const sReturn = sm && sdir !== sm.dir && now < sm.until &&
+        Math.abs(v.vx) < Math.max(1600, sm.vel * 1.55);
       if (Math.abs(dx) > window.innerWidth * 0.13 &&
-          Math.abs(dx) > Math.abs(dy) * 1.6 && Math.abs(v.vx) > 1000 &&
-          !((dx > 0 ? 'right' : 'left') === this._swipeOppDir &&
-            now < this._swipeOppUntil && Math.abs(v.vx) < 1700)) {
+          Math.abs(dx) > Math.abs(dy) * 1.6 && Math.abs(v.vx) > 1000 && !sReturn) {
         this._swipeCooldownUntil = now + 800;
         this._fistCooldownUntil = Math.max(this._fistCooldownUntil, now + 700);
         this._flickHoldUntil = Math.max(this._flickHoldUntil, now + 700);
-        // the recoil of this stroke may not fire back — through EITHER detector
-        this._swipeOppDir = dx > 0 ? 'left' : 'right';
-        this._swipeOppUntil = now + 1600;
-        this._flickOppDir = this._swipeOppDir;
-        this._flickOppUntil = now + 1600;
+        this._mom.x = { dir: sdir, vel: Math.abs(v.vx), until: now + 2600 };
         this._samples.length = 0;
         this._relSamples.length = 0;
-        this._emit('swipe', { axis: 'x', dir: dx > 0 ? 'right' : 'left', vx: v.vx, pure });
+        this._emit('swipe', { axis: 'x', dir: sdir, vx: v.vx, pure });
       } else if (pure &&
           Math.abs(dy) > window.innerHeight * 0.18 &&
           Math.abs(dy) > Math.abs(dx) * 1.6 && Math.abs(v.vy) > 1250) {
