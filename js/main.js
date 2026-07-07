@@ -278,7 +278,7 @@ function boot() {
   hands.addEventListener('hands', (e) => {
     gestures.ingest(e.detail);
     const h = e.detail.hands[0];
-    if (app.rec && h) {
+    if (app.recOn && h) {
       app.rec.push(`${(performance.now() / 1000).toFixed(2)} ${h.pinch.toFixed(2)} ${h.open.toFixed(2)} ${h.size.toFixed(3)} ${h.palm.x.toFixed(3)} ${h.palm.y.toFixed(3)} ${h.index.x.toFixed(3)} ${h.index.y.toFixed(3)}`);
       if (app.rec.length > 1400) app.rec.shift();
     }
@@ -1425,9 +1425,16 @@ function cycleDebug() {
 }
 
 function toggleRec() {
-  app.rec = app.rec ? null : [];
+  // stop KEEPS the buffer — the whole point of recording is to copy it after;
+  // a new rec starts a fresh trace
+  if (app.recOn) {
+    app.recOn = false;
+  } else {
+    app.rec = [];
+    app.recOn = true;
+  }
   const b = $('debug-rec');
-  if (b) b.textContent = app.rec ? 'rec ● пишет' : 'rec (⌥R)';
+  if (b) b.textContent = app.recOn ? 'rec ● пишет' : (app.rec?.length ? 'rec ✓ · ⌥C' : 'rec (⌥R)');
 }
 
 function copyLog() {
