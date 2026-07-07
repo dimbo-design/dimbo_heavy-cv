@@ -354,6 +354,7 @@ function boot() {
     if (e.code === 'KeyD' && (e.altKey || e.ctrlKey)) cycleDebug();
     if (e.code === 'KeyC' && e.altKey) copyLog();
     if (e.code === 'KeyR' && e.altKey) toggleRec();
+    if (e.code === 'KeyT' && e.altKey) copyRec();
   });
   document.addEventListener('click', (e) => {
     if (app.lb) {
@@ -1434,25 +1435,56 @@ function toggleRec() {
     app.recOn = true;
   }
   const b = $('debug-rec');
-  if (b) b.textContent = app.recOn ? 'rec ● пишет' : (app.rec?.length ? 'rec ✓ · ⌥C' : 'rec (⌥R)');
+  if (b) b.textContent = app.recOn ? 'rec ● пишет' : (app.rec?.length ? 'rec ✓ · ⌥T' : 'rec (⌥R)');
 }
 
-function copyLog() {
+function logHead() {
   const s = app.signals, g = app.gestures;
-  const head = [
+  return [
     `# living-interface log · ${new Date().toISOString()}`,
     `state ${app.state} space ${app.spaceId || '—'} lb ${!!app.lb}`,
     `pinch ${g.hand?.pinch?.toFixed(2) ?? '—'} base ${g._pinchSlow?.toFixed(2) ?? '—'} size ${g.hand?.size?.toFixed(2) ?? '—'}`,
     `score ${s?.score.toFixed(3)} frac ${s?.frac.toFixed(3)} device ${app.device}`,
     '',
   ];
+}
+
+// clipboard API rejects silently in plenty of real situations (focus,
+// permissions) — fall back to the old textarea trick, and always say
+// out loud whether the text actually landed in the buffer
+function copyText(text, btnId, idleLabel) {
+  const done = (ok) => {
+    const b = $(btnId);
+    if (!b) return;
+    b.textContent = ok ? 'скопировано ✓' : 'не вышло ✗';
+    setTimeout(() => { b.textContent = idleLabel; }, 1800);
+  };
+  const fallback = () => {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove();
+      done(ok);
+    } catch { done(false); }
+  };
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text).then(() => done(true), fallback);
+  } else fallback();
+}
+
+function copyLog() {
+  copyText(logHead().concat(app.glogFull).join('\n'), 'debug-copy', 'copy log (⌥C)');
+}
+
+function copyRec() {
   const trace = app.rec && app.rec.length
-    ? ['', '--- trace: t pinch open size palmX palmY indexX indexY', ...app.rec]
-    : [];
-  navigator.clipboard?.writeText(head.concat(app.glogFull, trace).join('\n')).then(() => {
-    const b = $('debug-copy');
-    if (b) { b.textContent = 'скопировано ✓'; setTimeout(() => { b.textContent = 'copy log (⌥C)'; }, 1500); }
-  });
+    ? ['--- trace: t pinch open size palmX palmY indexX indexY', ...app.rec]
+    : ['--- trace: пусто (⌥R, движение, ⌥R)'];
+  copyText(logHead().concat(trace).join('\n'), 'debug-copyrec', 'copy rec (⌥T)');
 }
 
 function renderDebug() {
@@ -1473,7 +1505,11 @@ function renderDebug() {
     rec.id = 'debug-rec';
     rec.textContent = 'rec (⌥R)';
     rec.addEventListener('click', toggleRec);
-    tools.append(mode, b, rec);
+    const cr = document.createElement('button');
+    cr.id = 'debug-copyrec';
+    cr.textContent = 'copy rec (⌥T)';
+    cr.addEventListener('click', copyRec);
+    tools.append(mode, b, rec, cr);
     el.before(tools);
     // the copy button deliberately outlives the panel — the log is most
     // wanted right after you've hidden the numbers
