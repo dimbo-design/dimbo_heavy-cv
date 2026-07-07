@@ -26,8 +26,13 @@ const isMobile =
 let lang = localStorage.getItem('lang') ||
   ((navigator.language || 'en').toLowerCase().startsWith('ru') ? 'ru' : 'en');
 
-// the interface remembers a returning visitor
-const returning = !!localStorage.getItem('visited');
+// the interface remembers a returning visitor · ?fresh forgets you
+// (for first-touch testing after your own hands have learned the site)
+if (new URLSearchParams(location.search).has('fresh')) {
+  try { localStorage.removeItem('visited'); localStorage.removeItem('lang'); } catch (_) { /* ok */ }
+}
+const returning = !!localStorage.getItem('visited') &&
+  !new URLSearchParams(location.search).has('fresh');
 try { localStorage.setItem('visited', '1'); } catch (_) { /* private mode */ }
 
 // ---------------------------------------------------------------- signals
