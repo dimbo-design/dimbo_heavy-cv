@@ -114,6 +114,17 @@ export class Field {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     this.renderer.setClearColor(CONFIG.colors.bg, 1);
 
+    // the GPU may take the canvas away (sleep, memory pressure, driver
+    // reset). preventDefault permits restoration; three.js recompiles its
+    // programs, and the depth stream re-uploads textures within a frame —
+    // without this the canvas stays black forever while the page lives on
+    canvas.addEventListener('webglcontextlost', (e) => e.preventDefault());
+    canvas.addEventListener('webglcontextrestored', () => {
+      this.renderer.setSize(window.innerWidth, window.innerHeight);
+      if (this.texA) this.texA.needsUpdate = true;
+      if (this.texB) this.texB.needsUpdate = true;
+    });
+
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(
       CONFIG.camera.fov, 1, 0.1, 100);
@@ -279,6 +290,35 @@ export class Field {
     this.uniforms.uDepthB.value = this.texB;
     this.uniforms.uMix.value = 0;
     this.mixRate = 1 / Math.max(40, Math.min(600, expectedIntervalMs || 120));
+  }
+
+  // the easter egg: the form briefly becomes words. Rendered at the depth
+  // pipeline's own scale and fed through setDepth, so the morph in and out
+  // rides the same uMix crossfade as every real frame.
+  showGlyph(text) {
+    const W = 176, H = 132;
+    const c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    const g = c.getContext('2d', { willReadFrequently: true });
+    g.fillStyle = '#000';
+    g.fillRect(0, 0, W, H);
+    // the plane samples camera-frame coords (mirrored on screen) — pre-flip
+    g.save();
+    g.translate(W, 0);
+    g.scale(-1, 1);
+    g.fillStyle = '#fff';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    const lines = text.split('\n');
+    const fs = Math.min(46, Math.floor((W * 1.62) / Math.max(...lines.map((l) => l.length))));
+    g.font = `900 ${fs}px "Fixel Display", system-ui, sans-serif`;
+    lines.forEach((l, i) =>
+      g.fillText(l, W / 2, H / 2 + (i - (lines.length - 1) / 2) * fs * 1.14));
+    g.restore();
+    const px = g.getImageData(0, 0, W, H).data;
+    const d = new Uint8Array(W * H);
+    for (let i = 0; i < W * H; i++) d[i] = px[i * 4] > 128 ? 235 : 0;
+    this.setDepth(d, W, H, 90);
   }
 
   setTargets({ coherence, opacity, progress }) {

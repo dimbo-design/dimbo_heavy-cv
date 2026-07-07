@@ -196,6 +196,8 @@ const app = {
   nodePos: new Map(),       // id → {x, y} screen px
   pointer: null,            // fingertip of the REFLECTION, screen px (main screen)
   lastDepth: null,
+  glyphUntil: 0,                // the form is briefly words (the easter egg)
+  signFrames: 0, signLast: null, signCooldownUntil: 0,
   hold: { p: 0, target: null, until: 0 },
   ghost: null, lastGhostAt: 0, lastHandAt: 0,   // the reflection demonstrates
   lbCooldownUntil: 0,
@@ -256,6 +258,7 @@ function boot() {
   }, 500);
 
   engine.addEventListener('depth', (e) => {
+    if (performance.now() < app.glyphUntil) return;   // the words hold the stage
     const { data, width, height, stats } = e.detail;
     field.setDepth(data, width, height, engine.inferMs);
     app.lastDepth = { data, width, height };     // texture copies; safe to keep
@@ -278,6 +281,18 @@ function boot() {
   hands.addEventListener('hands', (e) => {
     gestures.ingest(e.detail);
     const h = e.detail.hands[0];
+    // the easter egg: the mirror answers in the visitor's own language.
+    // Six consecutive frames — an accidental flash of a sign is not a sign
+    const sgn = h?.sign || null;
+    app.signFrames = sgn && sgn === app.signLast ? app.signFrames + 1 : (sgn ? 1 : 0);
+    app.signLast = sgn;
+    const nowS = performance.now();
+    if (sgn && app.signFrames >= 6 && nowS > app.signCooldownUntil &&
+        app.state === 'present' && !app.spaceId && !app.lb) {
+      app.signCooldownUntil = nowS + 15000;
+      app.glyphUntil = nowS + 2300;
+      field.showGlyph(sgn === 'fack' ? 'F@CK\nYOU' : 'PEACE');
+    }
     if (app.recOn && h) {
       app.rec.push(`${(performance.now() / 1000).toFixed(2)} ${h.pinch.toFixed(2)} ${h.open.toFixed(2)} ${h.size.toFixed(3)} ${h.palm.x.toFixed(3)} ${h.palm.y.toFixed(3)} ${h.index.x.toFixed(3)} ${h.index.y.toFixed(3)}`);
       if (app.rec.length > 1400) app.rec.shift();
@@ -386,6 +401,17 @@ async function requestCamera() {
   hide('denied');
   try {
     await app.engine.startCamera();
+    // permission revoked or the device seized mid-session: the stream says
+    // 'ended' — return to the invitation honestly instead of watching a
+    // dead feed with a frozen hand and a lying telemetry line
+    app.engine.stream?.getVideoTracks?.()[0]?.addEventListener('ended', () => {
+      app.engine.running = false;
+      app.cameraOn = false;
+      document.body.classList.remove('camera-on', 'hand-on');
+      closeLightbox();
+      closeSpace();
+      enterDenied();
+    });
     app.cameraOn = true;
     hide('invite');
     app.state = 'watching';

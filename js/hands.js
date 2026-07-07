@@ -100,11 +100,19 @@ function summarize(lm) {
   const open = tips.reduce((s, i) => s + d(lm[i], palm), 0) / 4 / size;
   const idxExt = d(lm[8], palm) / size;
   const midExt = d(lm[12], palm) / size;
+  const ringExt = d(lm[16], palm) / size;
+  const pinkyExt = d(lm[20], palm) / size;
+  // named signs (the mirror answers in the visitor's own language) — STRICT
+  // profiles: a false positive here would insult an innocent guest
+  const vSplit = d(lm[8], lm[12]) / size;
+  let sign = null;
+  if (midExt > 1.25 && idxExt < 0.95 && ringExt < 0.95 && pinkyExt < 0.95) sign = 'fack';
+  else if (idxExt > 1.2 && midExt > 1.2 && ringExt < 0.95 && pinkyExt < 0.95 && vSplit > 0.35) sign = 'peace';
   return {
     palm: { x: palm.x, y: palm.y },
     index: { x: lm[8].x, y: lm[8].y },
     pinchPoint: { x: (lm[4].x + lm[8].x) / 2, y: (lm[4].y + lm[8].y) / 2 },
-    size, pinch, open,
+    size, pinch, open, sign,
     pointing: idxExt > 1.15 && midExt < 1.0,
   };
 }
