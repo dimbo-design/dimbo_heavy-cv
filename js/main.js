@@ -491,6 +491,9 @@ function openSpace(id) {
   app.hold.until = performance.now() + 1200;
 
   document.body.classList.toggle('space-right', (node.pose?.x ?? 1) < 0);
+  // sideways flicks exist only where something moves sideways — on strip-less
+  // right chapters a diagonal snap must fall through to the vertical reading
+  app.gestures.flickXEnabled = (node.pose?.x ?? 1) >= 0;
   renderSpaceContent(node);
   app.scroll.y = 0; app.scroll.target = 0; app.scroll.vel = 0; app.scroll.over = 0;
   app.pageX = 0; app.pageXVel = 0;
@@ -544,6 +547,7 @@ function closeSpace() {
   app.hold.until = performance.now() + 900;
   app.strips = [];
   app.drag = null;
+  app.gestures.flickXEnabled = false;
   closeLightbox();
   document.body.classList.remove('space-open');
   app.field.setPose(null);
@@ -851,6 +855,7 @@ function openLightbox(fig) {
   renderLightbox();
   document.body.classList.add('lb-open');
   app.gestures.spreadEnabled = true;
+  app.gestures.flickXEnabled = true;    // sideways flicks walk the photos
   flipFrom(fig);
 }
 
@@ -963,6 +968,9 @@ function closeLightbox() {
   app.lb = null;
   app.lbCooldownUntil = performance.now() + 800;
   app.gestures.spreadEnabled = false;
+  // back to the chapter's own rule: sideways flicks only where strips live
+  app.gestures.flickXEnabled =
+    !!app.spaceId && !document.body.classList.contains('space-right');
   document.body.classList.remove('lb-open');
 }
 

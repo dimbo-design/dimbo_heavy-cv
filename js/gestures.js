@@ -35,6 +35,11 @@ export class Gestures extends EventTarget {
     this._samples = [];
     this._hasCursor = false;
     this.spreadEnabled = false;   // main enables it inside the lightbox only
+    // main enables it where something can actually move sideways (strip
+    // chapters, lightbox). Elsewhere a diagonal snap must not be consumed
+    // as a sideways sweep — on strip-less chapters that read as "scroll
+    // sometimes swallows a stroke", the right-vs-left inconsistency Dmitry felt
+    this.flickXEnabled = false;
 
     this._relSamples = [];        // fingertip minus palm — the lazy-finger signal
     this._relDisp = 0;
@@ -293,7 +298,8 @@ export class Gestures extends EventTarget {
           r0.o > 0.6 && dopen > 0.06 && dopen < 0.6) {
         axis = 'y'; dir = 'down';
         vel = (dry * window.innerHeight * this.gain) / rdt;
-      } else if (Math.abs(drx) > 0.17 && Math.abs(drx) > Math.abs(dry) * 1.4 &&
+      } else if (this.flickXEnabled &&
+          Math.abs(drx) > 0.17 && Math.abs(drx) > Math.abs(dry) * 1.4 &&
           r0.o > 0.55 && dopen < 0.6) {
         axis = 'x'; dir = drx < 0 ? 'right' : 'left';   // frame x is mirrored
         vel = (Math.abs(drx) * window.innerWidth * this.gain) / rdt;
