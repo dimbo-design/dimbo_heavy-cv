@@ -52,6 +52,8 @@ export class Gestures extends EventTarget {
     // decisively stronger stroke or a pause changes the direction of reading.
     this._mom = { x: null, y: null };   // {dir, vel, until}
     this._palmMom = null;               // recent palm-up energy guards "home"
+    this._fistHeld = false;             // the fist as a clutch (lightbox layer)
+    this._fistScreen = null;
   }
 
   // main reports whether a flick actually moved content. A stroke that met
@@ -87,7 +89,7 @@ export class Gestures extends EventTarget {
     // the edge/size gate guards the START only (against phantom hands);
     // a running spread survives to the frame edges — that's where spreading
     // hands naturally end up, and cutting it there killed the zoom mid-gesture
-    const startReal = this.spreadEnabled &&
+    const startReal = this.spreadEnabled && !this._fistHeld &&
       h2 && h2.size > 0.11 && h.size > 0.11 && inField(h) && inField(h2);
     const contReal = this.spreadEnabled && h2 && this._spread;
     const twoReal = this._spread ? contReal : startReal;
@@ -227,9 +229,43 @@ export class Gestures extends EventTarget {
         this._swipeCooldownUntil = Math.max(this._swipeCooldownUntil, now + 600);
         this._openSlow = h.open;
         this._emit(type, { x: this.cursor.x, y: this.cursor.y });
+        if (type === 'clench') {
+          this._fistHeld = true;          // the fist is now a clutch
+          this._fistScreen = null;
+        } else if (this._fistHeld) {
+          this._fistHeld = false;
+          this._emit('fistend', {});
+        }
       }
     } else {
       this._fistIn = 0; this._fistOut = 0;
+    }
+
+    // ---- the held fist is a clutch (Dmitry's lightbox layer): what the
+    // clench took, the moving fist now carries — main routes it to the
+    // photo slider or, zoomed, to panning. A slow relax lets go silently
+    // (no act, nothing closes); only the decisive unclench above speaks.
+    if (this._fistHeld) {
+      if (h.open > 1.0) {
+        this._fistOpenish = (this._fistOpenish || 0) + 1;
+        if (this._fistOpenish >= 3) {
+          this._fistHeld = false;
+          this._fistScreen = null;
+          this._emit('fistend', {});
+        }
+      } else {
+        this._fistOpenish = 0;
+      }
+      if (this._fistHeld) {
+        const fx = ((1 - h.palm.x) - 0.5) * this.gain * vw + vw / 2;
+        const fy = (h.palm.y - 0.5) * this.gain * vh + vh / 2;
+        if (this._fistScreen) {
+          this._emit('fistmove', {
+            dx: fx - this._fistScreen.x, dy: fy - this._fistScreen.y, x: fx, y: fy,
+          });
+        }
+        this._fistScreen = { x: fx, y: fy };
+      }
     }
 
     // ---- grab lifecycle with tap detection
@@ -277,7 +313,8 @@ export class Gestures extends EventTarget {
     // flick may not START from a fist (r0.o), may not open explosively wide
     // (that's an unclench), and stays quiet while a second hand is in frame
     // (zooming hands sweep — they must not flip photos).
-    if (!this.grabbing && now > this._flickHoldUntil && this._relSamples.length > 3 &&
+    if (!this.grabbing && !this._fistHeld &&
+        now > this._flickHoldUntil && this._relSamples.length > 3 &&
         !(h2 && h2.size > 0.08)) {
       const r0 = this._relSamples[0];
       const rN = this._relSamples[this._relSamples.length - 1];
@@ -328,7 +365,7 @@ export class Gestures extends EventTarget {
     // ---- open-palm flings. "pure" = the hand was honestly open for the
     // WHOLE window (fingers apart, palm spread) — a failed pinch attempt
     // drifting away must never register as a closing brush.
-    if (!this.grabbing && (mode === 'palm' || mode === 'hand') &&
+    if (!this.grabbing && !this._fistHeld && (mode === 'palm' || mode === 'hand') &&
         now > this._swipeCooldownUntil && this._samples.length > 3) {
       const s0 = this._samples[0];
       const dx = this.cursor.x - s0.x;
@@ -374,6 +411,11 @@ export class Gestures extends EventTarget {
 
   _dropHand() {
     if (this._grabLive) this._emit('grabend', { vx: 0, vy: 0 });
+    if (this._fistHeld) {
+      this._fistHeld = false;
+      this._fistScreen = null;
+      this._emit('fistend', {});
+    }
     this.active = false;
     this.mode = 'idle';
     this.grabbing = false;

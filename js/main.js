@@ -315,6 +315,8 @@ function boot() {
   gestures.addEventListener('spreadend', (e) => onSpreadEnd(e.detail));
   gestures.addEventListener('clench', (e) => onClench(e.detail));
   gestures.addEventListener('unclench', () => onUnclench());
+  gestures.addEventListener('fistmove', (e) => onFistMove(e.detail));
+  gestures.addEventListener('fistend', () => onFistEnd());
   for (const ev of ['enter', 'grabstart', 'tap', 'swipe', 'spreadstart', 'clench', 'unclench'])
     gestures.addEventListener(ev, () => { app.lastActivity = performance.now(); });
 
@@ -707,7 +709,42 @@ function onClench({ x, y }) {
 
 function onUnclench() {
   cancelDrag();
-  if (app.lb) closeLightbox();
+  if (!app.lb) return;
+  // layered release (Dmitry's design): zoomed, the open palm lets go of the
+  // ZOOM first — the photo returns whole, position not preserved on purpose
+  // (predictability beats saved state; spreading again is one gesture).
+  // Unzoomed, it releases the photo itself.
+  if (app.lb.zoom > 1.05) {
+    app.lb.zoom = 1; app.lb.panX = 0; app.lb.panY = 0;
+    applyLbTransform();
+    return;
+  }
+  closeLightbox();
+}
+
+// the held fist carries what the clench took (Dmitry's lightbox layer):
+// unzoomed it rifles through the stack — the photos slide under the fist,
+// the same continuous motion that opened one; zoomed it drags the frame
+function onFistMove({ dx, dy }) {
+  if (!app.lb) return;
+  if (app.lb.zoom > 1.05) {
+    app.lb.panX += dx; app.lb.panY += dy;
+    applyLbTransform();
+    return;
+  }
+  const f = app.fist || (app.fist = { acc: 0 });
+  f.acc += dx;
+  $('lb-img').style.transform = `translateX(${f.acc * 0.35}px)`;
+  if (Math.abs(f.acc) > 150) {
+    lightboxStep(f.acc < 0 ? 1 : -1);
+    f.acc = 0;
+    $('lb-img').style.transform = '';
+  }
+}
+
+function onFistEnd() {
+  app.fist = null;
+  if (app.lb && app.lb.zoom <= 1.05) $('lb-img').style.transform = '';
 }
 
 function cancelDrag() {
@@ -962,6 +999,7 @@ function closeLightbox() {
     }
   }
   app.lb = null;
+  app.fist = null;
   app.lbCooldownUntil = performance.now() + 800;
   app.gestures.spreadEnabled = false;
   // back to the chapter's own rule: sideways flicks only where strips live
