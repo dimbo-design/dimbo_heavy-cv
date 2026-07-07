@@ -30,8 +30,16 @@ let lang = localStorage.getItem('lang') ||
 // the interface remembers a returning visitor · ?fresh forgets you
 // (for first-touch testing after your own hands have learned the site)
 if (new URLSearchParams(location.search).has('fresh')) {
-  try { localStorage.removeItem('visited'); localStorage.removeItem('lang'); } catch (_) { /* ok */ }
+  try {
+    for (const k of ['visited', 'lang', 'gl_open', 'gl_close']) localStorage.removeItem(k);
+  } catch (_) { /* ok */ }
 }
+// in-object hints: they live in the sub-label slots and die after the
+// first success — the object teaches, nothing overlays
+const learned = {
+  open: !!localStorage.getItem('gl_open'),
+  close: !!localStorage.getItem('gl_close'),
+};
 const returning = !!localStorage.getItem('visited') &&
   !new URLSearchParams(location.search).has('fresh');
 try { localStorage.setItem('visited', '1'); } catch (_) { /* private mode */ }
@@ -190,7 +198,7 @@ const app = {
   pointer: null,            // fingertip of the REFLECTION, screen px (main screen)
   lastDepth: null,
   hold: { p: 0, target: null, until: 0 },
-  ghost: null, ghostPlayed: false,   // the reflection demonstrates a reach
+  ghost: null, lastGhostAt: 0, lastHandAt: 0,   // the reflection demonstrates
   lbCooldownUntil: 0,
   scroll: { y: 0, target: 0, vel: 0, max: 0, over: 0 },
   pageX: 0, pageXVel: 0,    // chapter grabbed/thrown sideways
@@ -1049,7 +1057,13 @@ function updateNodes(focusX, handActive, focusable = true) {
     app.focusChangedAt = performance.now();
     app.hold.p = 0;
     for (const el of document.querySelectorAll('.node')) {
-      el.classList.toggle('focus', el.dataset.id === best);
+      const isBest = el.dataset.id === best;
+      el.classList.toggle('focus', isBest);
+      if (isBest && handActive) {
+        const n = NODES.find((x) => x.id === best);
+        el.querySelector('.n-sub').textContent =
+          learned.open ? n.sub[lang] : UI.nodeHint[lang];
+      }
     }
   }
 }
@@ -1080,8 +1094,14 @@ function updateHold(dt, now) {
         a.classList.add('dl-got');
         setTimeout(() => a.classList.remove('dl-got'), 1600);
       } else if (target === 'close') {
+        if (!learned.close) { learned.close = true; try { localStorage.setItem('gl_close', '1'); } catch (_) {} }
         closeSpace();
       } else {
+        if (!learned.open) {
+          learned.open = true;
+          try { localStorage.setItem('gl_open', '1'); } catch (_) {}
+          localizeNodes();
+        }
         openSpace(target.slice(5));
       }
     }
@@ -1134,6 +1154,12 @@ function updateCursor() {
     app.hoverClose = null;
   }
 
+  const sc = $('space-close');
+  sc.classList.toggle('focus', !!app.hoverClose);
+  if (app.hoverClose) {
+    $('space-close-sub').textContent =
+      learned.close ? UI.closeSub.done[lang] : UI.closeSub.hint[lang];
+  }
   const over = app.hoverDl || app.hoverClose ? ' on-target' : '';
   el.className = (g.mode === 'grab' ? 'm-grab' : g.mode === 'palm' ? 'm-palm'
     : g.mode === 'point' ? 'm-point' : '') + over;
@@ -1238,14 +1264,17 @@ function updateGhostHand(now) {
     const e = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;   // easeInOut
     const x = gh.from.x + (gh.to.x - gh.from.x) * e;
     const y = gh.from.y + (gh.to.y - gh.from.y) * e;
-    const strength = Math.sin(Math.PI * Math.min(1, p * 1.12)) * 0.85;
+    const strength = Math.sin(Math.PI * Math.min(1, p * 1.12)) * 1.2;
     app.field.setHandLocal(x, y, strength);
     if (p >= 1) { app.field.setHandLocal(null, 0, 0); app.ghost = null; }
     return;
   }
-  if (app.ghostPlayed || app.state !== 'present' || app.spaceId) return;
+  if (app.gestures.active) app.lastHandAt = now;
+  if (app.state !== 'present' || app.spaceId) return;
   if (app.gestures.active || app.hands.failed) return;
   if (!app.nodesShown || now - app.presentSince < 6000) return;
+  if (now - app.lastHandAt < 8000 && app.lastHandAt > 0) return;
+  if (now - app.lastGhostAt < 30000) return;
   // reach for the node nearest to the form's centre
   let best = null, bd = Infinity;
   for (const n of NODES) {
@@ -1253,7 +1282,7 @@ function updateGhostHand(now) {
     if (d < bd) { bd = d; best = n; }
   }
   if (!best) return;
-  app.ghostPlayed = true;
+  app.lastGhostAt = now;
   app.ghost = {
     t0: now, dur: 2600,
     from: { x: 0, y: -3.4 },
@@ -1294,6 +1323,7 @@ function renderStatic() {
   setText('denied-action', UI.denied.a[lang]);
 
   setText('space-close-t', UI.close[lang]);
+  setText('space-close-sub', (learned.close ? UI.closeSub.done : UI.closeSub.hint)[lang]);
   setText('asleep-h', UI.asleep.h[lang]);
   setText('asleep-s', UI.asleep.s[lang]);
   setText('asleep-action', UI.asleep.a[lang]);
