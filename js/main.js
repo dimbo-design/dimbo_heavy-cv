@@ -776,10 +776,12 @@ function onSwipe({ axis, dir, vx, vy, pure }) {
   if (axis === 'y') {
     if (app.lb) { if (dir === 'down') closeLightbox(); return; }
     if (!app.spaceId) return;
-    // the sheet, both ways (Dmitry reads bidirectionally — field-corrected):
-    // palm up pushes the sheet up, palm down brings it back a step. Only a
-    // decisive hurl still throws the page home to the title — a gentle
-    // brush must never cost the reader their place.
+    // the family split is LAW (Dmitry caught its violation before the field
+    // did): the palm owns only "onward" — DOWN belongs to the finger alone,
+    // because a palm given both directions can't tell its own return from a
+    // gesture. A gentle palm-down is silence (a return or an unclear wish —
+    // neither may cost the reader their place); only the decisive hurl
+    // still throws the page home to the title.
     if (dir === 'up') {
       app.scroll.target = clamp(app.scroll.target + window.innerHeight * 0.6, 0, app.scroll.max);
     } else if (app.scroll.y < 60) {
@@ -787,8 +789,6 @@ function onSwipe({ axis, dir, vx, vy, pure }) {
     } else if (Math.abs(vy || 0) > 2000) {
       app.scroll.target = 0;                 // the hurl: fly home
       app.scroll.vel = 0;
-    } else {
-      app.scroll.target = clamp(app.scroll.target - window.innerHeight * 0.6, 0, app.scroll.max);
     }
     return;
   }
