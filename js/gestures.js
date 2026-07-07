@@ -1,12 +1,11 @@
 // Gesture interpretation over hand summaries.
 //
-// Design rule: a MINIMAL, conflict-free vocabulary built on two hand states:
-//   open-ish hand → pointing (through your own reflection on the main screen)
-//   pinch = grab in the air → drag, axis-locked; pull it to you / push it away
-//   to dive a layer deeper / surface back up (size of the hand = depth)
-// A quick pinch is a click. An open-palm fling flips (lightbox, strips).
-// Grabs are recognized as an ACT of closing the fingers, never as a static
-// posture — a relaxed hand keeps its fingers near each other and must stay free.
+// Design rule: a MINIMAL, conflict-free vocabulary built on what one RGB
+// camera can measure RELIABLY (field data killed the depth-by-hand-size axis:
+// tracked size jitters ±35%):
+//   open-ish hand → pointing · pinch-act = grab → drag, axis-locked
+//   quick pinch = click · open-palm fling ⟷ = flip · open-palm brush ↓ = close
+//   two hands moving apart/together = zoom (2D palm distance is rock solid)
 
 export class Gestures extends EventTarget {
   constructor() {
@@ -45,7 +44,31 @@ export class Gestures extends EventTarget {
     }
     this._lastSeen = now;
 
-    const h = hands.reduce((a, b) => (b.size > a.size ? b : a));
+    const sorted = [...hands].sort((a, b) => b.size - a.size);
+    const h = sorted[0];
+
+    // ---- two hands: the distance between palms is the zoom axis
+    const h2 = sorted[1];
+    if (h2 && h2.size > 0.07 && h.size > 0.07) {
+      const dist2 = Math.hypot(h.palm.x - h2.palm.x, h.palm.y - h2.palm.y);
+      if (!this._spread) {
+        this._spread = { d0: Math.max(dist2, 0.05) };
+        this._emit('spreadstart', {});
+      } else {
+        this._emit('spreadmove', { scale: dist2 / this._spread.d0 });
+      }
+      this._spreadLast = dist2 / this._spread.d0;
+      // while both hands are working, single-hand grabs stand down
+      if (this._grabLive) { this._emit('grabend', { vx: 0, vy: 0 }); this._grabLive = false; }
+      this._pinched = false;
+      this.grabbing = false;
+      this.mode = 'spread';
+      return;
+    }
+    if (this._spread) {
+      this._spread = null;
+      this._emit('spreadend', { scale: this._spreadLast || 1 });
+    }
 
     if (!this.active) {
       this.active = true;
@@ -114,21 +137,6 @@ export class Gestures extends EventTarget {
     this._samples.push({ x: this.cursor.x, y: this.cursor.y, t: now });
     while (this._samples.length && now - this._samples[0].t > 300) this._samples.shift();
 
-    // ---- depth axis while grabbing: pull to you = dive, push away = surface.
-    // Counts ONLY as a clean z-move: once the grab has travelled across the
-    // screen (a scroll or a drag), depth is off until the fingers reopen —
-    // otherwise scrolling would keep closing chapters by accident.
-    if (this._pinched && !this._zFired && this._grabSize0 && this._grabMoved < 48) {
-      const ratio = h.size / this._grabSize0;
-      if (ratio > 1.26) {
-        this._zFired = true;
-        this._emit('pull', { x: this.cursor.x, y: this.cursor.y });
-      } else if (ratio < 0.76) {
-        this._zFired = true;
-        this._emit('push', { x: this.cursor.x, y: this.cursor.y });
-      }
-    }
-
     // ---- grab lifecycle with tap detection
     if (this.grabbing && !wasGrabbing) {
       this._grabStartAt = now;
@@ -169,7 +177,15 @@ export class Gestures extends EventTarget {
           Math.abs(dx) > Math.abs(dy) * 1.6 && Math.abs(v.vx) > 1000) {
         this._swipeCooldownUntil = now + 800;
         this._samples.length = 0;
-        this._emit('swipe', { dir: dx > 0 ? 'right' : 'left', vx: v.vx });
+        this._emit('swipe', { axis: 'x', dir: dx > 0 ? 'right' : 'left', vx: v.vx });
+      } else if (mode === 'palm' &&
+          dy > window.innerHeight * 0.15 &&
+          dy > Math.abs(dx) * 1.6 && v.vy > 1000) {
+        // strictly an OPEN palm brushing down — half-closed scroll flicks
+        // must never close anything
+        this._swipeCooldownUntil = now + 900;
+        this._samples.length = 0;
+        this._emit('swipe', { axis: 'y', dir: 'down', vy: v.vy });
       }
     }
   }

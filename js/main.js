@@ -203,7 +203,7 @@ function boot() {
   hands.addEventListener('fatal', () => { app.handsFailed = true; });
   hands.addEventListener('hands', (e) => gestures.ingest(e.detail));
 
-  for (const ev of ['enter', 'leave', 'grabstart', 'grabend', 'tap', 'swipe', 'pull', 'push']) {
+  for (const ev of ['enter', 'leave', 'grabstart', 'grabend', 'tap', 'swipe', 'spreadstart', 'spreadend']) {
     gestures.addEventListener(ev, (e) => {
       const h = gestures.hand;
       const line = `${(performance.now() / 1000).toFixed(1)}s ${ev}` +
@@ -228,9 +228,10 @@ function boot() {
   gestures.addEventListener('grabend', (e) => onGrabEnd(e.detail));
   gestures.addEventListener('tap', (e) => onAirTap(e.detail));
   gestures.addEventListener('swipe', (e) => onSwipe(e.detail));
-  gestures.addEventListener('pull', (e) => onPull(e.detail));
-  gestures.addEventListener('push', () => onPush());
-  for (const ev of ['enter', 'grabstart', 'tap', 'swipe', 'pull', 'push'])
+  gestures.addEventListener('spreadstart', () => onSpreadStart());
+  gestures.addEventListener('spreadmove', (e) => onSpreadMove(e.detail));
+  gestures.addEventListener('spreadend', (e) => onSpreadEnd(e.detail));
+  for (const ev of ['enter', 'grabstart', 'tap', 'swipe', 'spreadstart'])
     gestures.addEventListener(ev, () => { app.lastActivity = performance.now(); });
 
   engine.initWorker();
@@ -432,8 +433,9 @@ function onGrabStart({ x, y }) {
     // the photo away (release far → it closes, like tossing it down)
     app.drag = { kind: 'lb-pending', accX: 0, accY: 0 };
   } else if (app.spaceId) {
-    // axis lock: horizontal over a strip drags the strip; horizontal on
-    // text grabs the whole chapter (throw it to close); vertical scrolls
+    // axis lock, biased toward scroll: human vertical pulls start with a
+    // sideways arc, so horizontal must be clearly dominant to win — and
+    // only a strip can take it. The chapter itself never slides sideways.
     app.drag = { kind: 'pending', strip: hitStrip(x, y), accX: 0, accY: 0 };
   }
   // grabbing on the main screen deliberately does nothing:
@@ -445,20 +447,13 @@ function onGrabMove({ dx, dy }) {
   if (!d) return;
   if (d.kind === 'pending') {
     d.accX += dx; d.accY += dy;
-    if (Math.hypot(d.accX, d.accY) < 12) return;
+    if (Math.hypot(d.accX, d.accY) < 26) return;
     const { accX, accY, strip } = d;
-    if (Math.abs(accX) > Math.abs(accY)) {
-      if (strip) {
-        app.drag = d = { kind: 'strip', strip };
-        strip.vel = 0;
-        strip.el.classList.add('dragging');
-        moveStrip(strip, accX);
-        return;
-      }
-      // grabbed the chapter itself
-      app.drag = d = { kind: 'page', acc: accX };
-      $('space-inner').classList.add('page-grabbed');
-      app.pageX = accX * 0.45;
+    if (strip && Math.abs(accX) > Math.abs(accY) * 1.8) {
+      app.drag = d = { kind: 'strip', strip };
+      strip.vel = 0;
+      strip.el.classList.add('dragging');
+      moveStrip(strip, accX);
       return;
     }
     app.drag = d = { kind: 'scroll' };
@@ -491,9 +486,6 @@ function onGrabMove({ dx, dy }) {
     const k = clamp(Math.abs(d.acc) / 260, 0, 1);
     $('lb-img').style.transform = `translateY(${d.acc * 0.5}px) scale(${1 - k * 0.06})`;
     $('lb-img').style.opacity = String(1 - k * 0.35);
-  } else if (d.kind === 'page') {
-    d.acc += dx;
-    app.pageX = d.acc * 0.45;
   } else if (d.kind === 'strip') {
     moveStrip(d.strip, dx);
   } else if (d.kind === 'scroll') {
@@ -515,13 +507,6 @@ function onGrabEnd({ vx, vy }) {
     img.style.transform = '';
     img.style.opacity = '';
     if (Math.abs(d.acc) > 170 || Math.abs(vy) > 900) closeLightbox();
-  } else if (d.kind === 'page') {
-    $('space-inner').classList.remove('page-grabbed');
-    const thrown = Math.abs(d.acc) > window.innerWidth * 0.26 || Math.abs(vx) > 1300;
-    if (thrown) {
-      app.pageXVel = clamp(vx, -2600, 2600) || Math.sign(d.acc) * 1600;
-      closeSpace();                    // the chapter flies off as it fades
-    }
   } else if (d.kind === 'strip') {
     d.strip.vel = vx;
     d.strip.el.classList.remove('dragging');
@@ -531,14 +516,25 @@ function onGrabEnd({ vx, vy }) {
   app.drag = null;
 }
 
-// grab + pull toward you: dive one layer deeper.
-// main screen → open the focused node · chapter → lift a photo into the lightbox
-function onPull({ x, y }) {
+// two hands apart = zoom. In the photo it zooms live; in a chapter a wide
+// spread lifts the nearest photo to full screen (Dmitry's idea #1)
+function onSpreadStart() {
   cancelDrag();
-  if (app.lb) { lbZoom(+0.6); return; }               // deeper into the photo
-  if (app.spaceId) {
+  if (app.lb) app.lb.zoom0 = app.lb.zoom;
+}
+
+function onSpreadMove({ scale }) {
+  if (!app.lb) return;
+  app.lb.zoom = clamp((app.lb.zoom0 || 1) * scale, 1, 2.6);
+  if (app.lb.zoom <= 1.02) { app.lb.zoom = 1; app.lb.panX = 0; app.lb.panY = 0; }
+  applyLbTransform();
+}
+
+function onSpreadEnd({ scale }) {
+  if (app.lb) return;                                  // zoom already applied live
+  if (app.spaceId && scale > 1.35) {
+    const { x, y } = app.gestures.cursor;
     const figs = currentStripItems();
-    if (!figs.length) return;
     let best = null, bd = Infinity;
     for (const f of figs) {
       const r = f.getBoundingClientRect();
@@ -547,18 +543,7 @@ function onPull({ x, y }) {
       if (d < bd) { bd = d; best = f; }
     }
     if (best) openLightbox(best);
-    return;
   }
-  if (app.state === 'present' && app.focusedId) openSpace(app.focusedId);
-}
-
-// grab + push away: surface back up. lightbox → chapter → main screen
-function onPush() {
-  cancelDrag();
-  if (app.lb) {
-    if (app.lb.zoom > 1.05) lbZoom(-0.8);             // zoom out first…
-    else closeLightbox();                             // …then leave the photo
-  } else if (app.spaceId) closeSpace();
 }
 
 function cancelDrag() {
@@ -569,12 +554,16 @@ function cancelDrag() {
     $('lb-img').style.transform = '';
     $('lb-img').style.opacity = '';
   }
-  if (d.kind === 'page') $('space-inner').classList.remove('page-grabbed');
   app.drag = null;
 }
 
-// open-palm fling: flips — never closes anything
-function onSwipe({ dir, vx }) {
+// open-palm fling ⟷ flips; open-palm brush ↓ closes the current layer
+function onSwipe({ axis, dir, vx }) {
+  if (axis === 'y') {
+    if (app.lb) closeLightbox();
+    else if (app.spaceId) closeSpace();
+    return;
+  }
   if (app.lb) { lightboxStep(dir === 'left' ? 1 : -1); return; }
   if (app.spaceId && app.gestures.active) {
     const s = hitStrip(app.gestures.cursor.x, app.gestures.cursor.y);
@@ -672,14 +661,6 @@ function lightboxStep(delta) {
   app.lb.zoom = 1; app.lb.panX = 0; app.lb.panY = 0;
   applyLbTransform();
   renderLightbox(delta);
-}
-
-// zoom via the depth axis: pull = closer, push = away (then out)
-function lbZoom(delta) {
-  const lb = app.lb;
-  lb.zoom = clamp(lb.zoom + delta, 1, 2.6);
-  if (lb.zoom <= 1.02) { lb.zoom = 1; lb.panX = 0; lb.panY = 0; }
-  applyLbTransform();
 }
 
 function applyLbTransform() {
