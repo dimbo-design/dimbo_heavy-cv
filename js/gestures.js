@@ -52,9 +52,14 @@ export class Gestures extends EventTarget {
     const h = sorted[0];
 
     // ---- two hands: the distance between palms is the zoom axis
+    // Phantom second hands live for a frame or two and used to murder grabs
+    // mid-scroll. A real second hand must persist and be substantial, and a
+    // live grab is never interrupted by it.
     const h2 = sorted[1];
     const inField = (p) => p.palm.x > 0.05 && p.palm.x < 0.95 && p.palm.y > 0.05 && p.palm.y < 0.95;
-    if (h2 && h2.size > 0.09 && h.size > 0.09 && inField(h) && inField(h2)) {
+    const twoReal = h2 && h2.size > 0.11 && h.size > 0.11 && inField(h) && inField(h2);
+    this._twoFrames = twoReal ? (this._twoFrames || 0) + 1 : 0;
+    if (twoReal && this._twoFrames >= 4 && !this._grabLive && !this._pinched) {
       const dist2 = Math.hypot(h.palm.x - h2.palm.x, h.palm.y - h2.palm.y);
       if (!this._spread) {
         this._spread = { d0: Math.max(dist2, 0.05) };
@@ -63,14 +68,10 @@ export class Gestures extends EventTarget {
         this._emit('spreadmove', { scale: dist2 / this._spread.d0 });
       }
       this._spreadLast = dist2 / this._spread.d0;
-      // while both hands are working, single-hand grabs stand down
-      if (this._grabLive) { this._emit('grabend', { vx: 0, vy: 0 }); this._grabLive = false; }
-      this._pinched = false;
-      this.grabbing = false;
       this.mode = 'spread';
       return;
     }
-    if (this._spread) {
+    if (this._spread && !twoReal) {
       this._spread = null;
       this._emit('spreadend', { scale: this._spreadLast || 1 });
     }

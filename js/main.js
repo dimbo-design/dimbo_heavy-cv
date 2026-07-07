@@ -436,10 +436,12 @@ function onGrabStart({ x, y }) {
     // the photo away (release far → it closes, like tossing it down)
     app.drag = { kind: 'lb-pending', accX: 0, accY: 0 };
   } else if (app.spaceId) {
-    // axis lock, biased toward scroll: human vertical pulls start with a
-    // sideways arc, so horizontal must be clearly dominant to win — and
-    // only a strip can take it. The chapter itself never slides sideways.
-    app.drag = { kind: 'pending', strip: hitStrip(x, y), accX: 0, accY: 0 };
+    // free drag (Dmitry's model): no axis lock — the vertical component
+    // always scrolls the chapter, the horizontal one moves the strip
+    // under the hand, both live at once
+    const s = hitStrip(x, y);
+    if (s) { s.vel = 0; s.el.classList.add('dragging'); }
+    app.drag = { kind: 'chapter', strip: s };
   }
   // grabbing on the main screen deliberately does nothing:
   // the mirror is a mirror, not a knob
@@ -448,19 +450,13 @@ function onGrabStart({ x, y }) {
 function onGrabMove({ dx, dy }) {
   let d = app.drag;
   if (!d) return;
-  if (d.kind === 'pending') {
-    d.accX += dx; d.accY += dy;
-    if (Math.hypot(d.accX, d.accY) < 26) return;
-    const { accX, accY, strip } = d;
-    if (strip && Math.abs(accX) > Math.abs(accY) * 1.8) {
-      app.drag = d = { kind: 'strip', strip };
-      strip.vel = 0;
-      strip.el.classList.add('dragging');
-      moveStrip(strip, accX);
-      return;
-    }
-    app.drag = d = { kind: 'scroll' };
-    app.scroll.target = clamp(app.scroll.target - accY, 0, app.scroll.max);
+  if (d.kind === 'chapter') {
+    const step = Math.abs(dy) < 1.5 ? 0 : clamp(dy, -70, 70);
+    d.flt = (d.flt ?? 0) * 0.5 + step * 0.5;
+    app.scroll.target = clamp(app.scroll.target - d.flt, 0, app.scroll.max);
+    app.scroll.vel = 0;
+    if (d.strip) moveStrip(d.strip, dx);
+    return;
   }
   if (d.kind === 'lb-pending') {
     d.accX += dx; d.accY += dy;
@@ -489,14 +485,6 @@ function onGrabMove({ dx, dy }) {
     const k = clamp(Math.abs(d.acc) / 260, 0, 1);
     $('lb-img').style.transform = `translateY(${d.acc * 0.5}px) scale(${1 - k * 0.06})`;
     $('lb-img').style.opacity = String(1 - k * 0.35);
-  } else if (d.kind === 'strip') {
-    moveStrip(d.strip, dx);
-  } else if (d.kind === 'scroll') {
-    // dead-zone kills tremor, the cap kills jumps, the EMA rounds the rest
-    const step = Math.abs(dy) < 1.5 ? 0 : clamp(dy, -70, 70);
-    d.flt = (d.flt ?? 0) * 0.5 + step * 0.5;
-    app.scroll.target = clamp(app.scroll.target - d.flt, 0, app.scroll.max);
-    app.scroll.vel = 0;
   }
 }
 
@@ -510,11 +498,12 @@ function onGrabEnd({ vx, vy }) {
     img.style.transform = '';
     img.style.opacity = '';
     if (Math.abs(d.acc) > 170 || Math.abs(vy) > 900) closeLightbox();
-  } else if (d.kind === 'strip') {
-    d.strip.vel = vx;
-    d.strip.el.classList.remove('dragging');
-  } else if (d.kind === 'scroll') {
+  } else if (d.kind === 'chapter') {
     app.scroll.vel = -vy;
+    if (d.strip) {
+      d.strip.vel = vx;
+      d.strip.el.classList.remove('dragging');
+    }
   }
   app.drag = null;
 }
@@ -533,13 +522,7 @@ function onSpreadMove({ scale }) {
   applyLbTransform();
 }
 
-function onSpreadEnd({ scale }) {
-  if (app.lb) return;                                  // zoom already applied live
-  if (app.spaceId && scale > 1.35) {
-    const f = nearestFigure(app.gestures.cursor.x, app.gestures.cursor.y);
-    if (f) openLightbox(f);
-  }
-}
+function onSpreadEnd() { /* zoom applies live; nothing to finalize */ }
 
 function nearestFigure(x, y) {
   let best = null, bd = Infinity;
@@ -569,7 +552,7 @@ function onUnclench() {
 function cancelDrag() {
   const d = app.drag;
   if (!d) return;
-  if (d.kind === 'strip') d.strip.el.classList.remove('dragging');
+  if (d.kind === 'chapter' && d.strip) d.strip.el.classList.remove('dragging');
   if (d.kind === 'lightbox' || d.kind === 'lb-toss') {
     $('lb-img').style.transform = '';
     $('lb-img').style.opacity = '';
@@ -586,9 +569,10 @@ function onSwipe({ axis, dir, vx }) {
   }
   if (app.lb) { lightboxStep(dir === 'left' ? 1 : -1); return; }
   if (app.spaceId && app.gestures.active) {
-    // chapters that live on the right close with a rightward brush —
-    // the content leaves in its own direction (they have no strips)
-    if (dir === 'right' && document.body.classList.contains('space-right')) {
+    // right-side chapters have no strips, so horizontal is theirs alone:
+    // any sideways brush closes them (a swing's recoil often registers
+    // as the opposite direction — both must count)
+    if (document.body.classList.contains('space-right')) {
       closeSpace();
       return;
     }
@@ -1026,7 +1010,7 @@ function updateSpacePhysics(dt) {
 
   for (const s of app.strips) {
     const { min, max } = stripBounds(s);
-    const dragging = app.drag?.kind === 'strip' && app.drag.strip === s;
+    const dragging = app.drag?.kind === 'chapter' && app.drag.strip === s;
     if (!dragging) {
       if (Math.abs(s.vel) > 5) {
         s.x += s.vel * dt;
