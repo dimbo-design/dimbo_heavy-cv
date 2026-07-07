@@ -33,6 +33,7 @@ export class Gestures extends EventTarget {
     this._fistCooldownUntil = 0;
     this._samples = [];
     this._hasCursor = false;
+    this.spreadEnabled = false;   // main enables it inside the lightbox only
   }
 
   // grab held without movement — the deliberate "close" charge in main
@@ -57,7 +58,8 @@ export class Gestures extends EventTarget {
     // live grab is never interrupted by it.
     const h2 = sorted[1];
     const inField = (p) => p.palm.x > 0.05 && p.palm.x < 0.95 && p.palm.y > 0.05 && p.palm.y < 0.95;
-    const twoReal = h2 && h2.size > 0.11 && h.size > 0.11 && inField(h) && inField(h2);
+    const twoReal = this.spreadEnabled &&
+      h2 && h2.size > 0.11 && h.size > 0.11 && inField(h) && inField(h2);
     this._twoFrames = twoReal ? (this._twoFrames || 0) + 1 : 0;
     if (twoReal && this._twoFrames >= 4 && !this._grabLive && !this._pinched) {
       const dist2 = Math.hypot(h.palm.x - h2.palm.x, h.palm.y - h2.palm.y);
@@ -140,7 +142,7 @@ export class Gestures extends EventTarget {
     this.cursor.x += (x - this.cursor.x) * a;
     this.cursor.y += (y - this.cursor.y) * a;
 
-    this._samples.push({ x: this.cursor.x, y: this.cursor.y, t: now });
+    this._samples.push({ x: this.cursor.x, y: this.cursor.y, t: now, o: h.open, p: h.pinch });
     while (this._samples.length && now - this._samples[0].t > 300) this._samples.shift();
 
     // ---- clench / unclench: fast palm↔fist transitions against the slow
@@ -196,28 +198,29 @@ export class Gestures extends EventTarget {
       this._grabLive = false;
     }
 
-    // ---- open-palm horizontal fling: flips things (lightbox, strips)
+    // ---- open-palm flings. "pure" = the hand was honestly open for the
+    // WHOLE window (fingers apart, palm spread) — a failed pinch attempt
+    // drifting away must never register as a closing brush.
     if (!this.grabbing && (mode === 'palm' || mode === 'hand') &&
         now > this._swipeCooldownUntil && this._samples.length > 3) {
       const s0 = this._samples[0];
       const dx = this.cursor.x - s0.x;
       const dy = this.cursor.y - s0.y;
       const v = this._velocity();
+      const pure = this._samples.every((s) => s.o > 1.05 && s.p > 0.45);
       if (Math.abs(dx) > window.innerWidth * 0.13 &&
           Math.abs(dx) > Math.abs(dy) * 1.6 && Math.abs(v.vx) > 1000) {
         this._swipeCooldownUntil = now + 800;
         this._fistCooldownUntil = Math.max(this._fistCooldownUntil, now + 700);
         this._samples.length = 0;
-        this._emit('swipe', { axis: 'x', dir: dx > 0 ? 'right' : 'left', vx: v.vx });
-      } else if (mode === 'palm' &&
-          dy > window.innerHeight * 0.15 &&
-          dy > Math.abs(dx) * 1.6 && v.vy > 1000) {
-        // strictly an OPEN palm brushing down — half-closed scroll flicks
-        // must never close anything
+        this._emit('swipe', { axis: 'x', dir: dx > 0 ? 'right' : 'left', vx: v.vx, pure });
+      } else if (pure &&
+          dy > window.innerHeight * 0.18 &&
+          dy > Math.abs(dx) * 1.6 && v.vy > 1250) {
         this._swipeCooldownUntil = now + 900;
         this._fistCooldownUntil = Math.max(this._fistCooldownUntil, now + 700);
         this._samples.length = 0;
-        this._emit('swipe', { axis: 'y', dir: 'down', vy: v.vy });
+        this._emit('swipe', { axis: 'y', dir: 'down', vy: v.vy, pure: true });
       }
     }
   }

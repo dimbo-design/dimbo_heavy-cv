@@ -363,6 +363,23 @@ body.space-open .blk {
   color: var(--ink-faint); margin-top: 10px; max-width: 40ch; line-height: 1.6;
 }
 
+/* thin position hint: flares up the moment the text is gripped */
+#scroll-hint {
+  position: absolute; top: 15vh; bottom: 18vh; width: 2px;
+  left: calc(7.5vw + min(46vw, 640px) + 22px);
+  background: rgba(232, 228, 218, 0.08);
+  opacity: 0; transition: opacity 0.3s;
+  pointer-events: none;
+}
+body.space-right #scroll-hint {
+  left: auto; right: calc(7.5vw + min(46vw, 640px) + 22px);
+}
+#scroll-hint.on { opacity: 1; }
+#scroll-hint i {
+  position: absolute; left: 0; width: 100%;
+  background: var(--ink); opacity: 0.7;
+}
+
 /* ── hand cursor ────────────────────────────────────────────── */
 
 #cursor {

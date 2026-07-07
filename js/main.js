@@ -442,6 +442,7 @@ function onGrabStart({ x, y }) {
     const s = hitStrip(x, y);
     if (s) { s.vel = 0; s.el.classList.add('dragging'); }
     app.drag = { kind: 'chapter', strip: s };
+    document.body.classList.add('gripping');   // instant "you've got it"
   }
   // grabbing on the main screen deliberately does nothing:
   // the mirror is a mirror, not a knob
@@ -457,8 +458,8 @@ function onGrabMove({ dx, dy }) {
     const wy = clamp((Math.abs(dy) / tot) * 1.7, 0, 1);
     const wx = clamp((Math.abs(dx) / tot) * 1.7, 0, 1);
 
-    const step = (Math.abs(dy) < 1.5 ? 0 : clamp(dy, -70, 70)) * wy;
-    d.flt = (d.flt ?? 0) * 0.5 + step * 0.5;
+    const step = (Math.abs(dy) < 1.5 ? 0 : clamp(dy, -90, 90)) * wy;
+    d.flt = (d.flt ?? 0) * 0.35 + step * 0.65;
     const raw = app.scroll.target - d.flt;
     app.scroll.target = clamp(raw, 0, app.scroll.max);
     // rubber band: pulling past an edge visibly carries the content with
@@ -515,6 +516,7 @@ function onGrabEnd({ vx, vy }) {
       d.strip.vel = vx;
       d.strip.el.classList.remove('dragging');
     }
+    document.body.classList.remove('gripping');
   }
   app.drag = null;
 }
@@ -561,6 +563,7 @@ function onUnclench() {
 }
 
 function cancelDrag() {
+  document.body.classList.remove('gripping');
   const d = app.drag;
   if (!d) return;
   if (d.kind === 'chapter' && d.strip) d.strip.el.classList.remove('dragging');
@@ -572,7 +575,7 @@ function cancelDrag() {
 }
 
 // open-palm fling ⟷ flips; open-palm brush ↓ closes the current layer
-function onSwipe({ axis, dir, vx }) {
+function onSwipe({ axis, dir, vx, pure }) {
   if (axis === 'y') {
     if (app.lb) closeLightbox();
     else if (app.spaceId) closeSpace();
@@ -584,7 +587,7 @@ function onSwipe({ axis, dir, vx }) {
     // any sideways brush closes them (a swing's recoil often registers
     // as the opposite direction — both must count)
     if (document.body.classList.contains('space-right')) {
-      closeSpace();
+      if (pure) closeSpace();                 // a drifted pinch won't close
       return;
     }
     const s = hitStrip(app.gestures.cursor.x, app.gestures.cursor.y);
@@ -643,6 +646,7 @@ function openLightbox(fig) {
   };
   renderLightbox();
   document.body.classList.add('lb-open');
+  app.gestures.spreadEnabled = true;
   flipFrom(fig);
 }
 
@@ -754,6 +758,7 @@ function closeLightbox() {
   }
   app.lb = null;
   app.lbCooldownUntil = performance.now() + 800;
+  app.gestures.spreadEnabled = false;
   document.body.classList.remove('lb-open');
 }
 
@@ -1016,12 +1021,28 @@ function updateSpacePhysics(dt) {
     app.scroll.target = clamp(app.scroll.target + app.scroll.vel * dt, 0, app.scroll.max);
     app.scroll.vel *= Math.exp(-dt * 3.2);
   }
-  app.scroll.y += (app.scroll.target - app.scroll.y) * (1 - Math.exp(-dt * 9));
+  app.scroll.y += (app.scroll.target - app.scroll.y) * (1 - Math.exp(-dt * 14));
   if (!app.drag || app.drag.kind !== 'chapter') {
     app.scroll.over *= Math.exp(-dt * 8);            // spring home
     if (Math.abs(app.scroll.over) < 0.4) app.scroll.over = 0;
   }
   inner.style.transform = `translate(${app.pageX}px, ${-app.scroll.y + app.scroll.over}px)`;
+
+  // position hint: appears on grip / motion, shows where you are in the text
+  const hint = $('scroll-hint');
+  if (hint) {
+    const busy = document.body.classList.contains('gripping') ||
+      Math.abs(app.scroll.vel) > 40 || app.scroll.over !== 0;
+    hint.classList.toggle('on', busy && app.scroll.max > 0);
+    if (app.scroll.max > 0) {
+      const frac = window.innerHeight / (inner.scrollHeight || 1);
+      const th = Math.max(0.08, Math.min(1, frac));
+      const pos = app.scroll.y / app.scroll.max;
+      const bar = hint.firstElementChild;
+      bar.style.height = `${th * 100}%`;
+      bar.style.top = `${pos * (1 - th) * 100}%`;
+    }
+  }
 
   for (const s of app.strips) {
     const { min, max } = stripBounds(s);
