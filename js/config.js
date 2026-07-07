@@ -42,6 +42,10 @@ export const CONFIG = {
     proxMin: 0.05,        // foreground fraction ↦ proximity 0..1
     proxMax: 0.42,
 
+    // skeleton presence (Pose Landmarker); depth heuristics are the fallback
+    poseEnter: 0.55, poseExit: 0.30,
+    poseEnterMs: 400, poseExitMs: 2200,
+
     leanDelta: 0.105,     // proximity rise over baseline that opens a panel
     leanMs:    450,
     closeDelta: 0.075,    // proximity drop that closes it
@@ -69,6 +73,8 @@ export const CONFIG = {
     depthIdle: 160,        // camera on, nobody in frame
     handsPresent: 33,      // gestures need low latency above all
     handsIdle: 140,
+    posePresent: 100,      // skeleton presence/head — smooth is enough
+    poseIdle: 150,
   },
 
   hold: { ms: 900, maxSpeed: 420 },       // dwell charge: bar appears at 40%, fills over the rest

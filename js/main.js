@@ -13,6 +13,7 @@ import { NODES, UI, renderPanel } from './content.js';
 import { Field } from './scene.js';
 import { DepthEngine } from './depth.js';
 import { HandsEngine } from './hands.js';
+import { PoseEngine } from './pose.js';
 import { Gestures } from './gestures.js';
 
 const $ = (id) => document.getElementById(id);
@@ -46,6 +47,9 @@ class Signals {
     this.proximity = 0;
     this.baseline = 0;
     this.motionPeak = 0;
+    this.usePose = false;
+    this.vis = 0;
+    this.shoulders = null;
     this.panelOpen = false;
     this.openBaseline = 0;
     this.lastLeanEnd = 0;
@@ -53,6 +57,40 @@ class Signals {
     this._exitAt = null;
     this._leanAt = null;
     this._closeAt = null;
+  }
+
+  // Presence and head from the SKELETON — precise entry/exit, and a head
+  // that stays the head when a hand is raised (the depth centroid didn't).
+  feedPose(p, now) {
+    const c = this.cfg;
+    this.usePose = true;
+    ema(this, 'vis', p.vis, 0.35);
+    if (p.head && p.vis > 0.35) {
+      ema(this, 'cx', 1 - p.head.x, 0.25);        // mirrored
+      ema(this, 'cy', p.head.y, 0.25);
+    }
+    if (p.shoulders) this.shoulders = p.shoulders;
+
+    if (!this.present) {
+      if (this.vis > c.poseEnter) {
+        this._enterAt ??= now;
+        if (now - this._enterAt > c.poseEnterMs) {
+          this.present = true;
+          this._enterAt = null;
+          this.baseline = this.proximity;
+          this.onPresence?.(true);
+        }
+      } else this._enterAt = null;
+    } else {
+      if (this.vis < c.poseExit) {
+        this._exitAt ??= now;
+        if (now - this._exitAt > c.poseExitMs) {
+          this.present = false;
+          this._exitAt = null;
+          this.onPresence?.(false);
+        }
+      } else this._exitAt = null;
+    }
   }
 
   feed(stats, now) {
@@ -63,13 +101,17 @@ class Signals {
     ema(this, 'score', rawScore, 0.30);
     ema(this, 'frac', stats.frac, 0.30);
     ema(this, 'motion', stats.motion, 0.25);
-    ema(this, 'cx', 1 - stats.cx, 0.22);          // mirrored
-    ema(this, 'cy', stats.cy, 0.22);
+    if (!this.usePose) {
+      ema(this, 'cx', 1 - stats.cx, 0.22);        // mirrored
+      ema(this, 'cy', stats.cy, 0.22);
+    }
 
     this.motionPeak = Math.max(this.motionPeak * 0.96, stats.motion);
 
     this.proximity += (clamp((this.frac - c.proxMin) / (c.proxMax - c.proxMin), 0, 1)
       - this.proximity) * 0.25;
+
+    if (this.usePose) return;                      // skeleton owns presence
 
     if (!this.present) {
       const eligible = this.score > c.enterScore && this.motionPeak > c.motionGate;
@@ -134,6 +176,8 @@ const app = {
   modelReady: false,
   handsReady: false,
   handsFailed: false,
+  poseReady: false,
+  poseFailed: false,
   glog: [],                 // last recognized gesture events (debug)
   glogFull: [],             // whole-session log, copyable from the panel
   hoverDl: null,            // a[data-dl] under the hand cursor
@@ -174,9 +218,10 @@ function boot() {
   const field = new Field($('scene'));
   const engine = new DepthEngine();
   const hands = new HandsEngine();
+  const pose = new PoseEngine();
   const gestures = new Gestures();
   const signals = new Signals(CONFIG.presence);
-  Object.assign(app, { field, engine, hands, gestures, signals });
+  Object.assign(app, { field, engine, hands, pose, gestures, signals });
 
   for (const n of NODES) field.addAnchor(n.id, n.anchor);
   buildNodes();
@@ -203,6 +248,11 @@ function boot() {
   signals.onPresence = (on) => on ? enterPresent() : leavePresent();
   // lean-based open/close is deliberately gone: proximity was firing
   // by accident and eroded trust in the whole gesture layer
+
+  // -- skeleton pipeline: presence + head (depth heuristics stay as fallback)
+  pose.addEventListener('ready', () => { app.poseReady = true; });
+  pose.addEventListener('fatal', () => { app.poseFailed = true; });
+  pose.addEventListener('pose', (e) => signals.feedPose(e.detail, performance.now()));
 
   // -- hand pipeline
   hands.addEventListener('ready', () => { app.handsReady = true; });
@@ -289,6 +339,8 @@ async function requestCamera() {
     app.field.setTargets({ coherence: CONFIG.coherence.watching });
     document.body.classList.add('camera-on');
     app.hands.init(app.engine.video);
+    app.pose.init(app.engine.video);
+    app.pose.start();                 // runs while watching too — it IS the doorman
   } catch (_) {
     enterDenied();
   }
@@ -339,6 +391,7 @@ function applyCadence() {
     ? (open ? CONFIG.cadence.depthReading : CONFIG.cadence.depthPresent)
     : CONFIG.cadence.depthIdle);
   app.hands.setCadence(present ? CONFIG.cadence.handsPresent : CONFIG.cadence.handsIdle);
+  app.pose.setCadence(present ? CONFIG.cadence.posePresent : CONFIG.cadence.poseIdle);
 }
 
 // ---------------------------------------------------------------- nodes
@@ -1236,6 +1289,8 @@ function renderDebug() {
     `focus    ${app.focusedId || '—'}  hold ${app.hold.p.toFixed(2)}`,
     `infer    ${Math.round(app.engine?.inferMs || 0)}ms · ${app.device || '…'} · ${app.engine?.intervalMs}ms`,
     `hands    ${app.handsFailed ? 'FAILED' : app.handsReady ? 'ready' : 'loading'}`,
+    `body     ${app.poseFailed ? 'fallback:depth' : app.poseReady
+      ? `vis ${s.vis?.toFixed(2) ?? '—'} head ${s.cx.toFixed(2)},${s.cy.toFixed(2)}` : 'loading'}`,
     `events   ${app.glog.slice(-5).join('  ·  ') || '—'}`,
   ].join('\n');
 }
