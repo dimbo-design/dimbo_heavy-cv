@@ -15,6 +15,8 @@ const VERT = /* glsl */`
   uniform vec2 uPlane;
   uniform vec3 uHand;          // x, y in group space · z = strength
   uniform float uExhale;       // departure: the form breathes out and scatters
+  uniform float uPulse;        // directed radial accent (glyph transitions)
+  uniform vec2 uPulseO;        // ...and where it radiates from (torso, centre)
   varying float vD;
   varying float vGate;
   varying float vEdge;
@@ -41,6 +43,12 @@ const VERT = /* glsl */`
     // the exhale: a radial breath outward as the visitor's imprint lets go
     p.xy *= 1.0 + uExhale * (0.14 + 0.12 * aRand);
     p.z += uExhale * (aRand - 0.5) * 1.4;
+
+    // the pulse: same breath, but directed — the motion hack that sells
+    // the glyph swap (Dmitry's design: words bloom lightly, burst strongly,
+    // the body returns with a soft wave from the torso)
+    p.xy = uPulseO + (p.xy - uPulseO) * (1.0 + uPulse * (0.16 + 0.14 * aRand));
+    p.z += uPulse * (aRand - 0.5) * 0.9;
 
     // the hand touches the fabric: particles rise toward it
     float hd = distance(p.xy, uHand.xy);
@@ -152,6 +160,8 @@ export class Field {
       uOpacity:   { value: 1 },
       uDim:       { value: 0 },
       uExhale:    { value: 0 },
+      uPulse:     { value: 0 },
+      uPulseO:    { value: new THREE.Vector2(0, 0) },
       uHand:      { value: new THREE.Vector3(0, 0, 0) },
     };
 
@@ -201,6 +211,7 @@ export class Field {
     this._poseX = 0; this._poseRotY = 0; this._poseScale = 1; this._poseDim = 0;
 
     this._exhale = 0;
+    this._pulse = 0;
     this._relax = 0; this._relaxT = 0;
 
     // Hand touch target (group-local x, y + strength)
@@ -318,7 +329,17 @@ export class Field {
     g.restore();
     const px = g.getImageData(0, 0, W, H).data;
     const d = new Uint8Array(W * H);
-    for (let i = 0; i < W * H; i++) d[i] = px[i * 4] > 128 ? 235 : 0;
+    // the point size follows depth — a flat 235 made every letter-point
+    // maximal and uniform (Dmitry: "the most degraded version fell into
+    // the easter egg"). Letters get relief: a slow swell plus fine grain,
+    // so their points vary the way a body's do.
+    for (let i = 0; i < W * H; i++) {
+      if (px[i * 4] <= 128) { d[i] = 0; continue; }
+      const x = i % W, y = (i / W) | 0;
+      const swell = Math.sin(x * 0.23 + y * 0.31) * 30;
+      const grain = ((x * 73 + y * 149) % 13) / 12 * 44;
+      d[i] = 158 + swell + grain;
+    }
     this.setDepth(d, W, H, 900);   // assemble slowly, like a body arriving
   }
 
@@ -339,6 +360,12 @@ export class Field {
   setPose(pose) { this.pose = pose; }
 
   triggerExhale() { this._exhale = 1; }
+
+  // a directed radial accent: strength ~0.3 blooms, ~1.0 bursts
+  pulse(strength, ox = 0, oy = 0) {
+    this._pulse = Math.max(this._pulse, strength);
+    this.uniforms.uPulseO.value.set(ox, oy);
+  }
 
   // posture: 0 = close/upright, 1 = leaned back — the form breathes
   // slower and a touch deeper for a reading visitor. Never more than that.
@@ -405,6 +432,10 @@ export class Field {
     this._exhale *= Math.exp(-dt * 0.75);
     if (this._exhale < 0.003) this._exhale = 0;
     u.uExhale.value = this._exhale;
+
+    this._pulse *= Math.exp(-dt * 2.0);
+    if (this._pulse < 0.003) this._pulse = 0;
+    u.uPulse.value = this._pulse;
 
     // hand touch eases toward its target
     const hv = u.uHand.value;
