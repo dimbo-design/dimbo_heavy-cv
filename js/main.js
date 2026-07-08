@@ -318,9 +318,20 @@ function boot() {
     gestures.ingest(e.detail);
     const h = e.detail.hands[0];
     // the easter egg: the mirror answers in the visitor's own language.
-    // Six consecutive frames — an accidental flash of a sign is not a sign
-    const sgn = h?.sign || null;
-    app.signFrames = sgn && sgn === app.signLast ? app.signFrames + 1 : (sgn ? 1 : 0);
+    // Six consecutive frames — an accidental flash of a sign is not a sign.
+    // ALL hands are read, and the finger outranks the V: with two hands up,
+    // MediaPipe sometimes weaves landmarks across wrists and a false PEACE
+    // is born — the real fack on the other hand must win. Two facks get
+    // their own answer: the mirror takes offence.
+    const signs = e.detail.hands.map((hh) => hh?.sign).filter(Boolean);
+    let sgn = null;
+    if (signs.includes('fack')) {
+      sgn = signs.filter((s) => s === 'fack').length >= 2 ? 'fack2' : 'fack';
+    } else if (signs.includes('peace')) {
+      sgn = 'peace';
+    }
+    const fam = (s) => (s && s.startsWith('fack') ? 'fack' : s);
+    app.signFrames = sgn && fam(sgn) === fam(app.signLast) ? app.signFrames + 1 : (sgn ? 1 : 0);
     app.signLast = sgn;
     const nowS = performance.now();
     if (sgn && app.signFrames >= 6 && nowS > app.signCooldownUntil &&
@@ -335,7 +346,8 @@ function boot() {
       // into drift, the words assemble out of the drift
       field.setTargets({ coherence: 0.18 });
       setTimeout(() => {
-        field.showGlyph(sgn === 'fack' ? 'F@CK\nYOU' : 'PEACE');
+        field.showGlyph(
+          sgn === 'fack2' ? 'WOW\nRUDE' : sgn === 'fack' ? 'F@CK\nYOU' : 'PEACE');
         field.pulse(0.05);                // a whisper-strength stylistic twist
         if (app.state === 'present') {
           field.setTargets({ coherence: CONFIG.coherence.present });
