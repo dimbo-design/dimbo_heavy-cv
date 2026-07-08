@@ -66,9 +66,14 @@ the opposite swipe. Scrolling is free — no axis lock; a fling demands a
 strictly open palm, and for 0.65 s after releasing a grab all flings are
 muted — the hand's inertia after a scroll must not read as anything. The
 fist works only as a transition (the act of clenching/opening against a slow
-baseline) — a relaxed hand crosses no thresholds. Fist acts demand a slow
-hand and two frames of confirmation: fast motion smears the tracking and
-“collapses” the fingers — such frames do not count. A gesture without a
+baseline) — a relaxed hand crosses no thresholds. Fist acts demand a parked
+palm and two frames of confirmation: fast hand travel smears the tracking
+and “collapses” the fingers — such frames do not count (the palm is what is
+measured: an honest crisp clench flies the fingertips, and that must not
+disqualify it). The pinch is a family of grips, not one template: one, two
+or three fingertips folded onto the thumb all count — what separates a deep
+grip from a fist assembling is how fast the WHOLE hand collapses, plus a
+deliberate thumb act for the deeper grips. A gesture without a
 clutch cannot be bidirectional: in the air there is no glass to lift the
 finger from, and a return/wind-up is geometrically indistinguishable from
 the opposite stroke. So the vertical axis is split across two families under
@@ -142,7 +147,11 @@ without that click.
 
 If a person is in frame but never raises a hand, the reflection gestures
 first: a ghost hand of particles reaches towards the nearest node and
-dissolves (repeating as a quiet ambient until hands appear). Hints live
+dissolves (repeating as a quiet ambient until hands appear). And since a
+cold visitor never sits still — he grabs the mouse — the mirror answers
+that too: resting the cursor on a node while the hands stay down makes the
+reflection reach for that same node. Not a tooltip; the mirror showing it
+can do what you are doing. Hints live
 inside the objects: until a chapter has ever been opened by hand, the
 focused node's sub-label says “hold your hand — it opens”, and disappears
 forever after the first success. No overlays, no tooltips.

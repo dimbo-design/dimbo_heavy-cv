@@ -202,6 +202,7 @@ const app = {
   handAliveAt: 0, handAnchor: null,   // dwell trusts only a hand that has moved
   hold: { p: 0, target: null, until: 0 },
   ghost: null, lastGhostAt: 0, lastHandAt: 0,   // the reflection demonstrates
+  mouseAt: null, mouseHover: null,              // …and answers the mouse
   lbCooldownUntil: 0,
   scroll: { y: 0, target: 0, vel: 0, max: 0, over: 0 },
   pageX: 0, pageXVel: 0,    // chapter grabbed/thrown sideways
@@ -464,6 +465,10 @@ function boot() {
   // silent mouse/wheel fallbacks — never advertised, always working
   window.addEventListener('wheel', onWheel, { passive: false });
   window.addEventListener('mousedown', onMouseDown);
+  // the mouse betrays a hands-down visitor — the ghost answers it
+  window.addEventListener('mousemove', (e) => {
+    app.mouseAt = { x: e.clientX, y: e.clientY, t: performance.now() };
+  });
 
   requestAnimationFrame(loop);
 }
@@ -1539,6 +1544,35 @@ function updateGhostHand(now) {
   if (app.state !== 'present' || app.spaceId) return;
   if (app.gestures.active || app.hands.failed) return;
   if (!app.nodesShown || now - app.presentSince < 6000) return;
+
+  // the cold visitor never sits still — he grabs the mouse (cold-test
+  // verdict: the idle trigger below almost never gets its silence). So the
+  // mirror answers the mouse: hovering a node with the cursor while the
+  // hands stay down makes the reflection reach for that same node — "your
+  // reflection can do what you are doing". Once a real hand has spoken this
+  // session, the mirror stops demonstrating.
+  if (app.lastHandAt === 0 && app.mouseAt && now - app.mouseAt.t < 3000 &&
+      now - app.lastGhostAt > 14000) {
+    const id = hoveredNodeId();
+    if (!id) {
+      app.mouseHover = null;
+    } else if (app.mouseHover?.id !== id) {
+      app.mouseHover = { id, t0: now };
+    } else if (now - app.mouseHover.t0 > 450) {
+      const n = NODES.find((k) => k.id === id);
+      if (n) {
+        app.mouseHover = null;
+        app.lastGhostAt = now;
+        app.ghost = {
+          t0: now, dur: 2200,
+          from: { x: 0, y: -3.4 },
+          to: { x: n.anchor.x, y: n.anchor.y },
+        };
+        return;
+      }
+    }
+  }
+
   if (now - app.lastHandAt < 8000 && app.lastHandAt > 0) return;
   if (now - app.lastGhostAt < 30000) return;
   // reach for the node nearest to the form's centre
@@ -1554,6 +1588,20 @@ function updateGhostHand(now) {
     from: { x: 0, y: -3.4 },
     to: { x: best.anchor.x, y: best.anchor.y },
   };
+}
+
+// which node the MOUSE cursor is resting on (inflated hitbox — the label
+// area, not the exact glyphs); the ghost aims where the visitor aims
+function hoveredNodeId() {
+  const m = app.mouseAt;
+  if (!m) return null;
+  for (const el of document.querySelectorAll('.node.shown')) {
+    const r = el.getBoundingClientRect();
+    if (!r.width) continue;
+    if (m.x > r.left - 30 && m.x < r.right + 30 &&
+        m.y > r.top - 30 && m.y < r.bottom + 30) return el.dataset.id;
+  }
+  return null;
 }
 
 // quiet invitation: if nothing happens for a while, one node breathes once

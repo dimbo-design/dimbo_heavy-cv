@@ -187,8 +187,10 @@ export class Gestures extends EventTarget {
     this._relSamples.push({ rx: rel.x, ry: rel.y, px: h.palm.x, py: h.palm.y, o: h.open, t: now });
     while (this._relSamples.length && now - this._relSamples[0].t > 420) this._relSamples.shift();
     this._relDisp = 0;
+    this._rel130 = null;               // the ~130ms-ago sample: openness cliff
     for (let i = this._relSamples.length - 1; i >= 0; i--) {
       if (now - this._relSamples[i].t >= 130) {
+        this._rel130 = this._relSamples[i];
         this._relDisp = Math.hypot(rel.x - this._relSamples[i].rx, rel.y - this._relSamples[i].ry);
         break;
       }
@@ -204,16 +206,32 @@ export class Gestures extends EventTarget {
       // a collapsing fist is not a pinch; neither is a fingertip mid-flick,
       // nor the pause at the bottom of one — the stroke ends with the tip
       // resting by the thumb (pinch reads low, rel-motion reads calm) and
-      // field logs showed phantom micro-grabs jerking the scroll right there
-      const fingersOut = h.open > 0.85 && this._relDisp < 0.09 &&
+      // field logs showed phantom micro-grabs jerking the scroll right there.
+      // The pinch is a FAMILY of grips, not one template (his traces,
+      // 2026-07-08): the index pinch keeps the hand honestly open (o>0.85);
+      // folding the middle or ring finger into the grip drags openness down
+      // to ~0.6–0.8 — still a pinch. What separates a deep grip from a fist
+      // assembling is the openness CLIFF over 130ms: a grip folds fingertips
+      // (recorded Δo≈0.28), a fist folds the whole hand at once (Δo≈0.87).
+      // Deep grips also demand a decisive thumb act (pinch under 0.26, deep
+      // drop below the slow baseline) so a relaxed near-closed hand — whose
+      // thumb already rests by the fingers — never drifts into a grab.
+      const cliff = this._rel130 ? this._rel130.o - h.open : 1;
+      const gripOpen = h.open > 0.85 ||
+        (h.open > 0.55 && cliff < 0.45 &&
+         h.pinch < 0.26 && this._pinchSlow - h.pinch > 0.25);
+      const fingersOut = gripOpen && this._relDisp < 0.09 &&
         now > this._pinchBlockUntil;
       const pinchShape = h.pinch < 0.28 && this._pinchSlow - h.pinch > 0.10;
       const closingAct = fingersOut && pinchShape;
       const hardAct = fingersOut && h.pinch < 0.22 && this._pinchSlow - h.pinch > 0.18;
       if (pinchShape && !fingersOut) {
         if (now <= this._pinchBlockUntil) this._note('pinch ✗blocked', `${Math.round(this._pinchBlockUntil - now)}ms`);
-        else if (h.open <= 0.85) this._note('pinch ✗curled', `o ${h.open.toFixed(2)}`);
-        else this._note('pinch ✗finger-flying', `rel ${this._relDisp.toFixed(2)}`);
+        else if (!gripOpen) {
+          if (h.open <= 0.55) this._note('pinch ✗curled', `o ${h.open.toFixed(2)}`);
+          else if (cliff >= 0.45) this._note('pinch ✗cliff', `Δo ${cliff.toFixed(2)}`);
+          else this._note('pinch ✗shallow', `p ${h.pinch.toFixed(2)} drop ${(this._pinchSlow - h.pinch).toFixed(2)}`);
+        } else this._note('pinch ✗finger-flying', `rel ${this._relDisp.toFixed(2)}`);
       }
       this._pinchIn = closingAct ? (this._pinchIn || 0) + 1 : 0;
       // a decisive snap engages instantly — quick "duck-quack" taps must land
@@ -273,9 +291,16 @@ export class Gestures extends EventTarget {
     // ---- clench / unclench: fast palm↔fist transitions against the slow
     // openness baseline. A relaxed hand floats mid-range and crosses neither.
     this._openSlow += (h.open - this._openSlow) * 0.08;
-    // Field logs: fast motion blurs the landmarks and the fingers "collapse"
-    // for a frame or two — so fist acts demand a SLOW hand and two frames.
-    // A real clench is done with a steady hand; a brush never is.
+    // Field logs: fast TRANSLATION blurs the landmarks and the fingers
+    // "collapse" for a frame or two — so fist acts demand a PARKED PALM and
+    // two frames. The gate used to measure cursor speed, but the cursor
+    // rides the index finger, and an honest crisp clench IS a fast index
+    // (his trace 2026-07-08: palm parked at 0.01/130ms, cursor at 1700px/s)
+    // — crisp clenches died as "fast", and by the time the speed EMA cooled
+    // the 400ms open-palm history had scrolled away, so they died again as
+    // "history". The palm is what must stand still, so the palm is measured.
+    const palmMove = this._rel130
+      ? Math.hypot(h.palm.x - this._rel130.px, h.palm.y - this._rel130.py) : 1;
     // a real clench assembles from the WHOLE open palm at once; a hand
     // relaxing after a swipe curls finger by finger, and the last fold
     // used to complete the "fist" and open a photo (field log: clench
@@ -285,7 +310,7 @@ export class Gestures extends EventTarget {
     const r0o = this._relSamples.length > 3 ? this._relSamples[0].o : 0;
     const closeShape = h.open < 0.72 && this._openSlow - h.open > 0.35;
     const openShape = h.open > 1.28 && h.open - this._openSlow > 0.35;
-    if (!this._pinched && now > this._fistCooldownUntil && this.speed < 700) {
+    if (!this._pinched && now > this._fistCooldownUntil && palmMove < 0.05) {
       // the fist speaks only where main gave it a meaning (dead means
       // undetected): a clench in a chapter/lightbox, an unclench over a
       // held fist or an open photo. Elsewhere the same shapes are just a
@@ -308,7 +333,7 @@ export class Gestures extends EventTarget {
         // carries the values that let us judge it after the fact
         this._emit(type, {
           x: this.cursor.x, y: this.cursor.y,
-          info: `o ${h.open.toFixed(2)} r0 ${r0o.toFixed(2)} v ${Math.round(this.speed)}`,
+          info: `o ${h.open.toFixed(2)} r0 ${r0o.toFixed(2)} pm ${palmMove.toFixed(3)}`,
         });
         if (type === 'clench') {
           this._fistHeld = true;          // the fist is now a clutch
@@ -322,7 +347,7 @@ export class Gestures extends EventTarget {
       this._fistIn = 0; this._fistOut = 0;
       if (this.clenchEnabled && closeShape && !this._pinched) {
         if (now <= this._fistCooldownUntil) this._note('fist ✗cooldown', `${Math.round(this._fistCooldownUntil - now)}ms`);
-        else this._note('fist ✗fast', `v ${Math.round(this.speed)}`);
+        else this._note('fist ✗moving-palm', palmMove.toFixed(3));
       }
     }
 
