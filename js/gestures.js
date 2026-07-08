@@ -98,8 +98,12 @@ export class Gestures extends EventTarget {
     // the hand's own depth. Real palms can't overlap: distance is the tell.
     // The edge gate still guards the START only — a running spread survives
     // to the frame edges, where spreading hands naturally end up.
+    // zoom is a two-OPEN-hands gesture: a fist panning a zoomed frame with
+    // a second hand idling in view must not re-engage the scale (field log:
+    // the zoom crawled while panning)
     const startReal = this.spreadEnabled && !this._fistHeld &&
       h2 && h2.size > 0.11 && h.size > 0.11 && dist2 > 0.09 &&
+      h.open > 0.9 && h2.open > 0.9 &&
       inField(h) && inField(h2);
     const contReal = this.spreadEnabled && this._spread &&
       h2 && h2.size > 0.09 && dist2 > 0.065;

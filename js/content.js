@@ -187,7 +187,7 @@ export const NODES = [
   {
     id: 'path',
     pose: { x: -0.52, rotY: 0.42, scale: 0.8, dim: 0.2 },
-    anchor: { x: 3.9, y: -1.6, z: 2.0 },
+    anchor: { x: 3.9, y: -0.4, z: 2.0 },
     label: { ru: 'путь', en: 'path' },
     sub:   { ru: '10+ лет', en: '10+ years' },
     panel: {
@@ -228,7 +228,7 @@ export const NODES = [
   {
     id: 'contact',
     pose: { x: -0.3, rotY: 0.24, scale: 1.14, dim: 0.5 },
-    anchor: { x: 3.4, y: -3.1, z: 3.4 },
+    anchor: { x: 3.5, y: -2.6, z: 3.4 },
     label: { ru: 'связь', en: 'contact' },
     sub:   { ru: 'открыт к работе', en: 'open to work' },
     panel: {
@@ -273,12 +273,12 @@ export const UI = {
   },
 
   invite: {
-    h:  { ru: 'Этим интерфейсом управляет присутствие.',
-          en: 'This interface is driven by presence.' },
+    h:  { ru: 'Этим интерфейсом управляет присутствие',
+          en: 'This interface is driven by presence' },
     // returning visitors get warmth, not surveillance — «помнит» читалось
     // как слежка (полевой вердикт владельца)
-    hReturn: { ru: 'С возвращением.',
-               en: 'Welcome back.' },
+    hReturn: { ru: 'С возвращением',
+               en: 'Welcome back' },
     a:  { ru: 'позволить ему видеть', en: 'let it see' },
     s:  { ru: 'камера работает локально — изображение не покидает ваш компьютер',
           en: 'the camera runs locally — nothing ever leaves your machine' },

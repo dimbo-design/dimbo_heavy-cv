@@ -263,8 +263,15 @@ function boot() {
     if (performance.now() < app.glyphUntil) return;   // the words hold the stage
     const { data, width, height, stats } = e.detail;
     if (app.glyphWasOn) {
-      // the words let go the way they arrived: one slow crossfade back
+      // the words let go the way they arrived: scatter, then the body
+      // reassembles out of the drift while depth crossfades underneath
       app.glyphWasOn = false;
+      field.setTargets({ coherence: 0.18 });
+      setTimeout(() => {
+        if (app.state === 'present') {
+          field.setTargets({ coherence: CONFIG.coherence.present });
+        }
+      }, 420);
       field.setDepth(data, width, height, 900);
     } else {
       field.setDepth(data, width, height, engine.inferMs);
@@ -297,12 +304,21 @@ function boot() {
     const nowS = performance.now();
     if (sgn && app.signFrames >= 6 && nowS > app.signCooldownUntil &&
         app.state === 'present' && !app.spaceId && !app.lb) {
-      app.signCooldownUntil = nowS + 15000;
-      app.glyphUntil = nowS + 2800;
+      app.signCooldownUntil = nowS + 16000;
+      app.glyphUntil = nowS + 3400;
       app.glyphWasOn = true;
       document.body.classList.add('glyph-on');
-      setTimeout(() => document.body.classList.remove('glyph-on'), 2800);
-      field.showGlyph(sgn === 'fack' ? 'F@CK\nYOU' : 'PEACE');
+      setTimeout(() => document.body.classList.remove('glyph-on'), 4300);
+      // the REAL morph is the site's own birth animation (Dmitry's spec:
+      // "like the points first forming the figure"): the form scatters
+      // into drift, the words assemble out of the drift
+      field.setTargets({ coherence: 0.18 });
+      setTimeout(() => {
+        field.showGlyph(sgn === 'fack' ? 'F@CK\nYOU' : 'PEACE');
+        if (app.state === 'present') {
+          field.setTargets({ coherence: CONFIG.coherence.present });
+        }
+      }, 420);
     }
     if (app.recOn && h) {
       app.rec.push(`${(performance.now() / 1000).toFixed(2)} ${h.pinch.toFixed(2)} ${h.open.toFixed(2)} ${h.size.toFixed(3)} ${h.palm.x.toFixed(3)} ${h.palm.y.toFixed(3)} ${h.index.x.toFixed(3)} ${h.index.y.toFixed(3)}`);
