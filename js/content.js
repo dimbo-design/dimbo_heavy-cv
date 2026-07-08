@@ -280,7 +280,7 @@ export const UI = {
     hReturn: { ru: 'С возвращением',
                en: 'Welcome back' },
     a:  { ru: 'позволить ему видеть', en: 'let it see' },
-    s:  { ru: 'камера работает локально — изображение не покидает ваш компьютер',
+    s:  { ru: 'камера работает локально — изображение не покидает ваш компьютер',
           en: 'the camera runs locally — nothing ever leaves your machine' },
   },
 

@@ -1177,9 +1177,11 @@ function loopBody(t) {
       // the words are independent of the 3D form — the ONE thing the camera
       // always reads (a lean) may move them a little. The form itself never
       // turns; this parallax lives only while the glyph holds the stage.
+      const glyphOn = t < app.glyphUntil;
       field.setGlyphParallax(
-        t < app.glyphUntil ? -headX * 0.22 : 0,
-        t < app.glyphUntil ? (0.5 - signals.cy) * 0.3 : 0);
+        glyphOn ? clamp(-headX * 0.9, -1.2, 1.2) : 0,
+        glyphOn ? clamp((0.5 - signals.cy) * 0.7, -0.8, 0.8) : 0,
+        glyphOn ? 1 : 0);
       const nodesDelay = returning ? CONFIG.reveal.nodesMs * 0.45 : CONFIG.reveal.nodesMs;
       if (!app.nodesShown && t - app.presentSince > nodesDelay) revealNodes();
       if (app.nodesShown && !app.spaceId) updateNodes(headX, handActive);

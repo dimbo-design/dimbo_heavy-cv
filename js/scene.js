@@ -21,6 +21,7 @@ const VERT = /* glsl */`
   uniform vec2 uMixO;          // ...from this origin (group space)
   uniform float uMicro;        // formed-state micro-life (0 = statuesque)
   uniform vec2 uGlyphPar;      // the words alone may sway with a lean
+  uniform float uFlow;         // ...and slowly flow, like ink in water
   varying float vD;
   varying float vGate;
   varying float vEdge;
@@ -67,6 +68,11 @@ const VERT = /* glsl */`
 
     // glyph parallax: the words sway with the visitor's lean (form never does)
     p.xy += uGlyphPar;
+    // and the glyph's curl slowly FLOWS — a coherent spatial wave, so the
+    // words read as slowly streaming rather than twitching (Dmitry's ask)
+    p.xy += uFlow * 0.09 * vec2(
+      sin(uTime * 0.45 + p.y * 0.9),
+      cos(uTime * 0.38 + p.x * 0.7));
 
     // the hand touches the fabric: particles rise toward it
     float hd = distance(p.xy, uHand.xy);
@@ -184,6 +190,7 @@ export class Field {
       uMixO:      { value: new THREE.Vector2(0, 0) },
       uMicro:     { value: CONFIG.micro },
       uGlyphPar:  { value: new THREE.Vector2(0, 0) },
+      uFlow:      { value: 0 },
       uHand:      { value: new THREE.Vector3(0, 0, 0) },
     };
 
@@ -395,9 +402,10 @@ export class Field {
   }
 
   // the words alone sway with a lean; eased here so the swing is silk
-  setGlyphParallax(x, y) {
+  setGlyphParallax(x, y, flow = 0) {
     this._glyphParX = x;
     this._glyphParY = y;
+    this._glyphFlow = flow;
   }
 
   // refresh the crossfade's TARGET in place: the returning body stays LIVE
@@ -483,6 +491,7 @@ export class Field {
     const gp = u.uGlyphPar.value;
     gp.x += ((this._glyphParX || 0) - gp.x) * (1 - Math.exp(-dt * 3.2));
     gp.y += ((this._glyphParY || 0) - gp.y) * (1 - Math.exp(-dt * 3.2));
+    u.uFlow.value += ((this._glyphFlow || 0) - u.uFlow.value) * (1 - Math.exp(-dt * 2.4));
 
     // hand touch eases toward its target
     const hv = u.uHand.value;
