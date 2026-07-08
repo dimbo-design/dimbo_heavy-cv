@@ -55,7 +55,8 @@ export const CONFIG = {
 
   focus: {
     gain: 2.6,            // head-x ↦ focus cursor amplification
-    maxDistPx: 260,       // max distance between cursor and node to focus it
+    maxDistPx: 190,       // max distance between cursor and node to focus it
+                          // (260 grabbed neighbours: aiming under one lit another)
     smooth: 0.10,
   },
 

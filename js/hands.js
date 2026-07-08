@@ -107,7 +107,7 @@ function summarize(lm) {
   const vSplit = d(lm[8], lm[12]) / size;
   let sign = null;
   if (midExt > 1.25 && idxExt < 0.95 && ringExt < 0.95 && pinkyExt < 0.95) sign = 'fack';
-  else if (idxExt > 1.2 && midExt > 1.2 && ringExt < 0.95 && pinkyExt < 0.95 && vSplit > 0.35) sign = 'peace';
+  else if (idxExt > 1.15 && midExt > 1.15 && ringExt < 1.0 && pinkyExt < 1.0 && vSplit > 0.25) sign = 'peace';
   return {
     palm: { x: palm.x, y: palm.y },
     index: { x: lm[8].x, y: lm[8].y },

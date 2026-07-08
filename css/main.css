@@ -165,7 +165,10 @@ body.named #identity { opacity: 1; transform: none; }
 
 /* ── content nodes ──────────────────────────────────────────── */
 
-#nodes { position: fixed; inset: 0; z-index: 24; pointer-events: none; }
+#nodes { position: fixed; inset: 0; z-index: 24; pointer-events: none;
+  transition: opacity 0.55s ease; }
+/* while the form is briefly words, the words hold the whole stage */
+body.glyph-on #nodes { opacity: 0; }
 
 .node {
   position: absolute; left: 0; top: 0;

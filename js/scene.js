@@ -289,7 +289,8 @@ export class Field {
     this.uniforms.uDepthA.value = this.texA;
     this.uniforms.uDepthB.value = this.texB;
     this.uniforms.uMix.value = 0;
-    this.mixRate = 1 / Math.max(40, Math.min(600, expectedIntervalMs || 120));
+    // up to 1200ms: the glyph morph must breathe like the first formation
+    this.mixRate = 1 / Math.max(40, Math.min(1200, expectedIntervalMs || 120));
   }
 
   // the easter egg: the form briefly becomes words. Rendered at the depth
@@ -318,7 +319,7 @@ export class Field {
     const px = g.getImageData(0, 0, W, H).data;
     const d = new Uint8Array(W * H);
     for (let i = 0; i < W * H; i++) d[i] = px[i * 4] > 128 ? 235 : 0;
-    this.setDepth(d, W, H, 90);
+    this.setDepth(d, W, H, 900);   // assemble slowly, like a body arriving
   }
 
   setTargets({ coherence, opacity, progress }) {

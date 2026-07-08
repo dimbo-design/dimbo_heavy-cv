@@ -5,7 +5,9 @@ export const NODES = [
   {
     id: 'method',
     pose: { x: -0.46, rotY: 0.52, scale: 0.92, dim: 0.05 },
-    anchor: { x: -3.6, y: 2.2, z: 2.2 },
+    // the spatial grammar is honest: work on the LEFT, the person on the
+    // RIGHT — and no node lives on the silhouette's own territory
+    anchor: { x: 3.6, y: 2.2, z: 2.2 },
     label: { ru: 'метод', en: 'method' },
     sub:   { ru: 'как я думаю', en: 'how i think' },
     panel: {
@@ -38,7 +40,7 @@ export const NODES = [
   {
     id: 'warehouse',
     pose: { x: 0.46, rotY: -0.52, scale: 0.9, dim: 0 },
-    anchor: { x: 3.7, y: 2.1, z: 3.0 },
+    anchor: { x: -3.7, y: 2.1, z: 3.0 },
     label: { ru: 'склад ke × uzum', en: 'warehouse ke × uzum' },
     sub:   { ru: 'sla 72 → 100', en: 'sla 72 → 100' },
     panel: {
@@ -60,7 +62,7 @@ export const NODES = [
           ]},
           { h: 'решение', p: 'Интерфейс под физическую реальность склада: scan-first, без клавиатуры как основного ввода. Поля шаблонизированы с учётом всех зависимостей и развилок — интерфейс разворачивается пошагово, формируя страницу, по которой можно вернуться к любому шагу без потери контекста. Всё — без расширения штата.' },
           { h: 'продолжение · топология', p: 'Следом спроектировал систему управления топологией склада: полная картина перестановок, блокировок и наполнения ячеек взамен Excel-таблиц. После приобретения KazanExpress Магнитом этот подход лёг в основу топологии склада Магнит Маркета.' },
-          { h: 'продолжение · uzum', p: 'В 2024 та же линия продолжилась в Uzum — фактически одна команда и один проект, просто на две компании: система склада и ПВЗ маркетплейса Узбекистана. Параллельно временно закрывал позицию дизайн-лида команды — найм, онбординг, ревью работ — и внедрил формат персональных дизайн-спринтов между дизайнером и его кросс-функциональным кластером.' },
+          { h: 'продолжение · uzum', p: 'В 2024 линия склада продолжилась в Uzum: система склада и ПВЗ маркетплейса Узбекистана — то же операционное ядро, развитие того же подхода на новом масштабе. Параллельно временно закрывал позицию дизайн-лида команды — найм, онбординг, ревью работ — и внедрил формат персональных дизайн-спринтов между дизайнером и его кросс-функциональным кластером.' },
           { strip: [
             ['assets/gallery/uzum-flow.jpg', 'uzum — флоу приложения сотрудника склада'],
           ]},
@@ -84,7 +86,7 @@ export const NODES = [
           ]},
           { h: 'solution', p: 'An interface designed for the physical reality of the floor: scan-first, no keyboard as primary input. Fields are templated around every dependency and branch — the interface unfolds step by step into a page you can walk back through without losing context. All of it without growing the headcount.' },
           { h: 'follow-up · topology', p: 'Next I designed the warehouse topology management system: a full picture of moves, blocks and cell occupancy instead of Excel sheets. After Magnit acquired KazanExpress, this approach became the foundation of Magnit Market’s warehouse topology.' },
-          { h: 'follow-up · uzum', p: 'In 2024 the same line continued at Uzum — effectively one team and one project across two companies: the warehouse and pick-up point system of Uzbekistan’s marketplace. In parallel I temporarily covered the team’s design lead position — hiring, onboarding, reviews — and introduced personal design sprints between a designer and their cross-functional cluster.' },
+          { h: 'follow-up · uzum', p: 'In 2024 the warehouse line continued at Uzum: the warehouse and pick-up point system of Uzbekistan’s marketplace — the same operational core, the same approach at a new scale. In parallel I temporarily covered the team’s design lead position — hiring, onboarding, reviews — and introduced personal design sprints between a designer and their cross-functional cluster.' },
           { strip: [
             ['assets/gallery/uzum-flow.jpg', 'uzum — the warehouse worker app flow'],
           ]},
@@ -150,6 +152,9 @@ export const NODES = [
           ]},
           { p: 'MythHand Radio — веб-радио вселенной студии, спроектировано и собрано в одиночку: design & vibecode, от канона золотой сетки до работающего MVP. Рядом — веб-инструмент для танцорской импровизации с физическими дайсами, готовится к публичному запуску.' },
           { h: 'release p2p — в открытую', p: 'Настолка возвращается в цифру: P2P-веб-адаптация собственной «Release любой ценой» в открытой разработке. Монорепозиторий с UI-китом и плейграундом компонентов, впереди мультиплеер поверх WebRTC. Тот же метод в третий раз: design & vibecode.' },
+          { strip: [
+            ['assets/release-playground.png', 'release p2p — плейграунд ui-кита'],
+          ]},
           { links: [
             ['https://mythhand.com/', 'mythhand.com ↗'],
             ['https://github.com/MythHand/ReleaseBoardGameP2P', 'github — release p2p ↗'],
@@ -168,6 +173,9 @@ export const NODES = [
           ]},
           { p: 'MythHand Radio is the web radio of the studio’s universe, designed and built solo: design & vibecode, from a golden-grid canon to a working MVP. Next to it — a web tool for dance improvisation with physical dice, preparing for public launch.' },
           { h: 'release p2p — in the open', p: 'The board game returns to the digital: a P2P web adaptation of my own “Release at Any Cost”, developed in the open. A monorepo with a UI kit and a component playground, multiplayer over WebRTC ahead. The same method for the third time: design & vibecode.' },
+          { strip: [
+            ['assets/release-playground.png', 'release p2p — the ui-kit playground'],
+          ]},
           { links: [
             ['https://mythhand.com/', 'mythhand.com ↗'],
             ['https://github.com/MythHand/ReleaseBoardGameP2P', 'github — release p2p ↗'],
@@ -220,7 +228,7 @@ export const NODES = [
   {
     id: 'contact',
     pose: { x: -0.3, rotY: 0.24, scale: 1.14, dim: 0.5 },
-    anchor: { x: 0.2, y: -3.0, z: 3.4 },
+    anchor: { x: 3.4, y: -3.1, z: 3.4 },
     label: { ru: 'связь', en: 'contact' },
     sub:   { ru: 'открыт к работе', en: 'open to work' },
     panel: {

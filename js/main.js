@@ -197,7 +197,9 @@ const app = {
   pointer: null,            // fingertip of the REFLECTION, screen px (main screen)
   lastDepth: null,
   glyphUntil: 0,                // the form is briefly words (the easter egg)
+  glyphWasOn: false,
   signFrames: 0, signLast: null, signCooldownUntil: 0,
+  handAliveAt: 0, handAnchor: null,   // dwell trusts only a hand that has moved
   hold: { p: 0, target: null, until: 0 },
   ghost: null, lastGhostAt: 0, lastHandAt: 0,   // the reflection demonstrates
   lbCooldownUntil: 0,
@@ -260,7 +262,13 @@ function boot() {
   engine.addEventListener('depth', (e) => {
     if (performance.now() < app.glyphUntil) return;   // the words hold the stage
     const { data, width, height, stats } = e.detail;
-    field.setDepth(data, width, height, engine.inferMs);
+    if (app.glyphWasOn) {
+      // the words let go the way they arrived: one slow crossfade back
+      app.glyphWasOn = false;
+      field.setDepth(data, width, height, 900);
+    } else {
+      field.setDepth(data, width, height, engine.inferMs);
+    }
     app.lastDepth = { data, width, height };     // texture copies; safe to keep
     signals.feed(stats, performance.now());
   });
@@ -290,7 +298,10 @@ function boot() {
     if (sgn && app.signFrames >= 6 && nowS > app.signCooldownUntil &&
         app.state === 'present' && !app.spaceId && !app.lb) {
       app.signCooldownUntil = nowS + 15000;
-      app.glyphUntil = nowS + 2300;
+      app.glyphUntil = nowS + 2800;
+      app.glyphWasOn = true;
+      document.body.classList.add('glyph-on');
+      setTimeout(() => document.body.classList.remove('glyph-on'), 2800);
       field.showGlyph(sgn === 'fack' ? 'F@CK\nYOU' : 'PEACE');
     }
     if (app.recOn && h) {
@@ -896,7 +907,8 @@ function onAirTap({ x, y }) {
     }
     return;
   }
-  if (app.state === 'present' && app.focusedId) openSpace(app.focusedId);
+  if (app.state === 'present' && app.focusedId &&
+      performance.now() > app.glyphUntil) openSpace(app.focusedId);
 }
 
 // ---------------------------------------------------------------- lightbox
@@ -1208,7 +1220,8 @@ function updateNodes(focusX, handActive, focusable = true) {
   // otherwise tracking jitter keeps resetting the dwell bar
   if (app.focusedId && best !== app.focusedId) {
     const cur = app.nodePos.get(app.focusedId);
-    if (cur && Math.hypot(cur.x - cursorPx, cur.y - cursorPy) < CONFIG.focus.maxDistPx * 1.45) {
+    // 1.45 held on to the old node so hard the neighbour was unpickable
+    if (cur && Math.hypot(cur.x - cursorPx, cur.y - cursorPy) < CONFIG.focus.maxDistPx * 1.22) {
       best = app.focusedId;
     }
   }
@@ -1232,8 +1245,19 @@ function updateNodes(focusX, handActive, focusable = true) {
 // dwell-to-open: hold an open hand (or a pointing finger) on a node
 function updateHold(dt, now) {
   const g = app.gestures;
-  const handCalm = g.active && !g.grabbing &&
-    g.speed < CONFIG.hold.maxSpeed && now > app.hold.until;
+  // a hand that has never MOVED is not a hand — a reclined knee or an
+  // armrest reads as one and its static "fingertip" charged dwell targets
+  // (field log: a chapter opened by furniture). Life = 60px of travel.
+  const c = g.cursor;
+  if (!g.active || !app.handAnchor) {
+    app.handAnchor = { x: c.x, y: c.y };
+  } else if (Math.hypot(c.x - app.handAnchor.x, c.y - app.handAnchor.y) > 60) {
+    app.handAliveAt = now;
+    app.handAnchor = { x: c.x, y: c.y };
+  }
+  const handCalm = g.active && !g.grabbing && now - app.handAliveAt < 3500 &&
+    g.speed < CONFIG.hold.maxSpeed && now > app.hold.until &&
+    now > app.glyphUntil;
 
   // in browse: dwell on the focused node → a bar fills ON THE NODE → open
   // in a chapter: dwell on the pdf link → the résumé downloads itself
