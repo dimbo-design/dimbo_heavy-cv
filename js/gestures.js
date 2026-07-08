@@ -45,6 +45,17 @@ export class Gestures extends EventTarget {
     // as a sideways sweep — on strip-less chapters that read as "scroll
     // sometimes swallows a stroke", the right-vs-left inconsistency Dmitry felt
     this.flickXEnabled = false;
+    // the same law extended to the palm/fist vocabulary (field log: dead
+    // palm-downs and phantom unclenches inside chapters each spent 0.6–1.5s
+    // of neighbour cooldowns — his very next real stroke landed in silence,
+    // which is the "unstable scroll" feel). main narrows each act to the
+    // screens where it MEANS something; elsewhere it is not even detected.
+    // Defaults match the present screen: dwell owns it, the palm is silent.
+    this.swipeUpEnabled = false;     // chapter: the palm pushes the sheet up
+    this.swipeDownEnabled = false;   // lightbox: the palm lets the photo go
+    this.clenchEnabled = false;      // chapter/lightbox: the fist takes/holds
+    this.unclenchEnabled = false;    // lightbox: the open palm releases
+    this._noteAt = {};               // near-miss journal, throttled per tag
 
     this._relSamples = [];        // fingertip minus palm — the lazy-finger signal
     this._relDisp = 0;
@@ -60,6 +71,18 @@ export class Gestures extends EventTarget {
     this._fistHeld = false;             // the fist as a clutch (lightbox layer)
     this._fistScreen = null;
     this._spreadGraceUntil = 0;         // zoom survives a flickering second hand
+  }
+
+  // the journal of refusals: a near-miss (the hand clearly attempted an act
+  // and one gate said no) is logged with the gate's name. The field loop
+  // was blind to these — the debug journal only showed what FIRED, and
+  // "не уверен, учитывает ли он неудачные попытки" was exactly right: it
+  // did not. Throttled per tag so a held posture doesn't flood the log.
+  _note(tag, info) {
+    const now = performance.now();
+    if (this._noteAt[tag] && now - this._noteAt[tag] < 600) return;
+    this._noteAt[tag] = now;
+    this._emit('note', { tag, info });
   }
 
   // main reports whether a flick actually moved content. A stroke that met
@@ -184,8 +207,14 @@ export class Gestures extends EventTarget {
       // field logs showed phantom micro-grabs jerking the scroll right there
       const fingersOut = h.open > 0.85 && this._relDisp < 0.09 &&
         now > this._pinchBlockUntil;
-      const closingAct = fingersOut && h.pinch < 0.28 && this._pinchSlow - h.pinch > 0.10;
+      const pinchShape = h.pinch < 0.28 && this._pinchSlow - h.pinch > 0.10;
+      const closingAct = fingersOut && pinchShape;
       const hardAct = fingersOut && h.pinch < 0.22 && this._pinchSlow - h.pinch > 0.18;
+      if (pinchShape && !fingersOut) {
+        if (now <= this._pinchBlockUntil) this._note('pinch ✗blocked', `${Math.round(this._pinchBlockUntil - now)}ms`);
+        else if (h.open <= 0.85) this._note('pinch ✗curled', `o ${h.open.toFixed(2)}`);
+        else this._note('pinch ✗finger-flying', `rel ${this._relDisp.toFixed(2)}`);
+      }
       this._pinchIn = closingAct ? (this._pinchIn || 0) + 1 : 0;
       // a decisive snap engages instantly — quick "duck-quack" taps must land
       if (hardAct || this._pinchIn >= 2) {
@@ -247,17 +276,25 @@ export class Gestures extends EventTarget {
     // Field logs: fast motion blurs the landmarks and the fingers "collapse"
     // for a frame or two — so fist acts demand a SLOW hand and two frames.
     // A real clench is done with a steady hand; a brush never is.
+    // a real clench assembles from the WHOLE open palm at once; a hand
+    // relaxing after a swipe curls finger by finger, and the last fold
+    // used to complete the "fist" and open a photo (field log: clench
+    // 1.5-2.5s after every palm swipe, thumb still out). The history
+    // gate is Dmitry's description verbatim: 400ms ago the palm was
+    // honestly open, and it fell all the way from there.
+    const r0o = this._relSamples.length > 3 ? this._relSamples[0].o : 0;
+    const closeShape = h.open < 0.72 && this._openSlow - h.open > 0.35;
+    const openShape = h.open > 1.28 && h.open - this._openSlow > 0.35;
     if (!this._pinched && now > this._fistCooldownUntil && this.speed < 700) {
-      // a real clench assembles from the WHOLE open palm at once; a hand
-      // relaxing after a swipe curls finger by finger, and the last fold
-      // used to complete the "fist" and open a photo (field log: clench
-      // 1.5-2.5s after every palm swipe, thumb still out). The history
-      // gate is Dmitry's description verbatim: 400ms ago the palm was
-      // honestly open, and it fell all the way from there.
-      const r0o = this._relSamples.length > 3 ? this._relSamples[0].o : 0;
-      const closing = h.open < 0.72 && this._openSlow - h.open > 0.35 &&
+      // the fist speaks only where main gave it a meaning (dead means
+      // undetected): a clench in a chapter/lightbox, an unclench over a
+      // held fist or an open photo. Elsewhere the same shapes are just a
+      // hand living its life — no event, no cooldowns spent.
+      const closing = this.clenchEnabled && closeShape &&
         r0o > 0.95 && r0o - h.open > 0.5;
-      const opening = h.open > 1.28 && h.open - this._openSlow > 0.35;
+      const opening = (this._fistHeld || this.unclenchEnabled) && openShape;
+      if (this.clenchEnabled && closeShape && !closing)
+        this._note('fist ✗history', `r0 ${r0o.toFixed(2)} o ${h.open.toFixed(2)}`);
       this._fistIn = closing ? (this._fistIn || 0) + 1 : 0;
       this._fistOut = opening ? (this._fistOut || 0) + 1 : 0;
       if (this._fistIn >= 2 || this._fistOut >= 2) {
@@ -266,7 +303,13 @@ export class Gestures extends EventTarget {
         this._fistCooldownUntil = now + 900;
         this._swipeCooldownUntil = Math.max(this._swipeCooldownUntil, now + 600);
         this._openSlow = h.open;
-        this._emit(type, { x: this.cursor.x, y: this.cursor.y });
+        // the diagnostics ride the journal line — the scroll-read-as-fist
+        // misfire Dmitry caught could not be recorded; now every clench
+        // carries the values that let us judge it after the fact
+        this._emit(type, {
+          x: this.cursor.x, y: this.cursor.y,
+          info: `o ${h.open.toFixed(2)} r0 ${r0o.toFixed(2)} v ${Math.round(this.speed)}`,
+        });
         if (type === 'clench') {
           this._fistHeld = true;          // the fist is now a clutch
           this._fistScreen = null;
@@ -277,6 +320,10 @@ export class Gestures extends EventTarget {
       }
     } else {
       this._fistIn = 0; this._fistOut = 0;
+      if (this.clenchEnabled && closeShape && !this._pinched) {
+        if (now <= this._fistCooldownUntil) this._note('fist ✗cooldown', `${Math.round(this._fistCooldownUntil - now)}ms`);
+        else this._note('fist ✗fast', `v ${Math.round(this.speed)}`);
+      }
     }
 
     // ---- the held fist is a clutch (Dmitry's lightbox layer): what the
@@ -351,51 +398,67 @@ export class Gestures extends EventTarget {
     // flick may not START from a fist (r0.o), may not open explosively wide
     // (that's an unclench), and stays quiet while a second hand is in frame
     // (zooming hands sweep — they must not flip photos).
-    if (!this.grabbing && !this._fistHeld && !this.calmActs &&
-        now > this._flickHoldUntil && this._relSamples.length > 3 &&
-        !(h2 && h2.size > 0.08)) {
+    if (!this.grabbing && this._relSamples.length > 3) {
       const r0 = this._relSamples[0];
       const rN = this._relSamples[this._relSamples.length - 1];
       const drx = rN.rx - r0.rx, dry = rN.ry - r0.ry;
       const dopen = rN.o - r0.o;
       const rdt = Math.max(50, rN.t - r0.t) / 1000;
-      let axis = null, dir, vel;
-      // vertical is ONE-DIRECTIONAL by design (the cascade lesson): without
-      // a clutch, a return/wind-up is geometrically the opposite stroke, and
-      // every "smart" disambiguator we stacked just suppressed input — which
-      // reads as lag. So only the downward snap is a gesture; upward finger
-      // motion is a hand coming home and is not even a detection. The other
-      // direction lives in a DIFFERENT family (Dmitry's split): palm swipe
-      // up reads on, finger snap down steps back — each family is blind to
-      // the other's parasitic motions. Hence the palm-stillness gate here,
-      // his own definition verbatim: the finger works, the palm stands.
-      const palmDisp = Math.hypot(rN.px - r0.px, rN.py - r0.py);
-      if (dry > 0.15 && dry > Math.abs(drx) * 1.4 && palmDisp < 0.06 &&
-          r0.o > 0.6 && dopen > 0.06 && dopen < 0.6) {
-        axis = 'y'; dir = 'down';
-        vel = (dry * window.innerHeight * this.gain) / rdt;
-      } else if (this.flickXEnabled &&
-          Math.abs(drx) > 0.17 && Math.abs(drx) > Math.abs(dry) * 1.4 &&
-          r0.o > 0.55 && dopen < 0.6) {
-        axis = 'x'; dir = drx < 0 ? 'right' : 'left';   // frame x is mirrored
-        vel = (Math.abs(drx) * window.innerWidth * this.gain) / rdt;
-      }
-      if (axis) {
-        const m = this._mom[axis];
-        const reversal = m && dir !== m.dir && now < m.until;
-        if (reversal && vel < Math.max(axis === 'y' ? 1000 : 1600, m.vel * 1.55)) {
-          // the finger going home for the next stroke — consume it silently
-          this._relSamples.length = 0;
-        } else {
-          this._relSamples.length = 0;
-          this._samples.length = 0;        // the same stroke is not also a palm swipe
-          this._flickHoldUntil = now + 340; // same direction may repeat quickly
-          // reading direction only exists where two directions do (galleries)
-          if (axis === 'x') this._mom.x = { dir, vel, until: now + 2600 };
-          this._swipeCooldownUntil = Math.max(this._swipeCooldownUntil, now + 800);
-          this._fistCooldownUntil = Math.max(this._fistCooldownUntil, now + 700);
-          this._pinchBlockUntil = now + 600;
-          this._emit('flick', { axis, dir, vel });
+      // an honest downward finger stroke that lands in a silent window is
+      // exactly the invisible failed attempt the field loop could not see
+      const strokeY = dry > 0.15 && dry > Math.abs(drx) * 1.4;
+      const mutedBy = this._fistHeld ? 'fist' : this.calmActs ? 'calm' :
+        now <= this._flickHoldUntil ? `hold ${Math.round(this._flickHoldUntil - now)}ms` :
+        (h2 && h2.size > 0.08) ? '2hands' : null;
+      if (mutedBy) {
+        if (strokeY) this._note('flick↓ ✗muted', mutedBy);
+      } else {
+        let axis = null, dir, vel;
+        // vertical is ONE-DIRECTIONAL by design (the cascade lesson): without
+        // a clutch, a return/wind-up is geometrically the opposite stroke, and
+        // every "smart" disambiguator we stacked just suppressed input — which
+        // reads as lag. So only the downward snap is a gesture; upward finger
+        // motion is a hand coming home and is not even a detection. The other
+        // direction lives in a DIFFERENT family (Dmitry's split): palm swipe
+        // up reads on, finger snap down steps back — each family is blind to
+        // the other's parasitic motions. Hence the palm-stillness gate here,
+        // his own definition verbatim: the finger works, the palm stands.
+        const palmDisp = Math.hypot(rN.px - r0.px, rN.py - r0.py);
+        if (strokeY && palmDisp < 0.06 &&
+            r0.o > 0.6 && dopen > 0.06 && dopen < 0.6) {
+          axis = 'y'; dir = 'down';
+          vel = (dry * window.innerHeight * this.gain) / rdt;
+        } else if (this.flickXEnabled &&
+            Math.abs(drx) > 0.17 && Math.abs(drx) > Math.abs(dry) * 1.4 &&
+            r0.o > 0.55 && dopen < 0.6) {
+          axis = 'x'; dir = drx < 0 ? 'right' : 'left';   // frame x is mirrored
+          vel = (Math.abs(drx) * window.innerWidth * this.gain) / rdt;
+        }
+        if (!axis && strokeY) {
+          // a real stroke, one gate said no — name the gate in the journal
+          if (palmDisp >= 0.06) this._note('flick↓ ✗palm-moved', palmDisp.toFixed(3));
+          else if (r0.o <= 0.6) this._note('flick↓ ✗from-curled', `o ${r0.o.toFixed(2)}`);
+          else if (dopen <= 0.06) this._note('flick↓ ✗no-extension', `Δo ${dopen.toFixed(2)}`);
+          else this._note('flick↓ ✗explosive-open', `Δo ${dopen.toFixed(2)}`);
+        }
+        if (axis) {
+          const m = this._mom[axis];
+          const reversal = m && dir !== m.dir && now < m.until;
+          if (reversal && vel < Math.max(axis === 'y' ? 1000 : 1600, m.vel * 1.55)) {
+            // the finger going home for the next stroke — consume it silently
+            this._relSamples.length = 0;
+            this._note('flick ↩return', dir);
+          } else {
+            this._relSamples.length = 0;
+            this._samples.length = 0;        // the same stroke is not also a palm swipe
+            this._flickHoldUntil = now + 340; // same direction may repeat quickly
+            // reading direction only exists where two directions do (galleries)
+            if (axis === 'x') this._mom.x = { dir, vel, until: now + 2600 };
+            this._swipeCooldownUntil = Math.max(this._swipeCooldownUntil, now + 800);
+            this._fistCooldownUntil = Math.max(this._fistCooldownUntil, now + 700);
+            this._pinchBlockUntil = now + 600;
+            this._emit('flick', { axis, dir, vel });
+          }
         }
       }
     }
@@ -420,27 +483,47 @@ export class Gestures extends EventTarget {
       const sReturn = sm && sdir !== sm.dir && now < sm.until &&
         Math.abs(v.vx) < Math.max(1600, sm.vel * 1.55);
       if (Math.abs(dx) > window.innerWidth * 0.13 &&
-          Math.abs(dx) > Math.abs(dy) * 1.6 && Math.abs(v.vx) > 1000 && !sReturn) {
-        this._swipeCooldownUntil = now + 800;
-        this._fistCooldownUntil = Math.max(this._fistCooldownUntil, now + 700);
-        this._flickHoldUntil = Math.max(this._flickHoldUntil, now + 700);
-        this._mom.x = { dir: sdir, vel: Math.abs(v.vx), until: now + 2600 };
-        this._samples.length = 0;
-        this._relSamples.length = 0;
-        this._emit('swipe', { axis: 'x', dir: sdir, vx: v.vx, pure });
-      } else if (pure &&
-          Math.abs(dy) > window.innerHeight * 0.18 &&
+          Math.abs(dx) > Math.abs(dy) * 1.6 && Math.abs(v.vx) > 1000) {
+        if (sReturn) {
+          this._note('swipe ↩return', sdir);
+        } else {
+          this._swipeCooldownUntil = now + 800;
+          this._fistCooldownUntil = Math.max(this._fistCooldownUntil, now + 700);
+          this._flickHoldUntil = Math.max(this._flickHoldUntil, now + 700);
+          this._mom.x = { dir: sdir, vel: Math.abs(v.vx), until: now + 2600 };
+          this._samples.length = 0;
+          this._relSamples.length = 0;
+          this._emit('swipe', { axis: 'x', dir: sdir, vx: v.vx, pure });
+        }
+      } else if (Math.abs(dy) > window.innerHeight * 0.18 &&
           Math.abs(dy) > Math.abs(dx) * 1.6 && Math.abs(v.vy) > 1250) {
         // the palm family holds two directions and Dmitry reads BOTH ways —
         // so the return-guard window is short and soft: right after an
         // up-stroke a downward drift is the palm coming home; past ~2.2s a
         // down-stroke is a deliberate step back and rides free
+        const sdirY = dy > 0 ? 'down' : 'up';
         const pm = this._palmMom;
-        if (dy > 0 && pm && now < pm.until &&
+        if (!pure) {
+          // a big y-stroke with fingers not honestly open — the most common
+          // shape of a palm swipe that "didn't work" in the field
+          this._note('swipe ✗not-pure', sdirY);
+        } else if (sdirY === 'down' && pm && now < pm.until &&
             Math.abs(v.vy) < Math.max(1700, pm.vel * 1.45)) {
           this._samples.length = 0;          // the palm coming home, not a call
+          this._note('swipe ↩home', '');
+        } else if (sdirY === 'down' ? !this.swipeDownEnabled : !this.swipeUpEnabled) {
+          // the palm's word means nothing on this screen — dead means
+          // undetected: no event, and none of the swipe/flick silence that
+          // used to poison the very next real stroke (field log: dead
+          // palm-downs inside chapters starved the finger and the palm both).
+          // Only the physiological fist guard survives — a hand relaxing
+          // after a big stroke still folds finger by finger.
+          this._samples.length = 0;
+          this._relSamples.length = 0;
+          this._fistCooldownUntil = Math.max(this._fistCooldownUntil, now + 1500);
+          this._note(`swipe ✗${sdirY}`, 'dead-here');
         } else {
-          this._palmMom = dy < 0 ? { vel: Math.abs(v.vy), until: now + 2200 } : null;
+          this._palmMom = sdirY === 'up' ? { vel: Math.abs(v.vy), until: now + 2200 } : null;
           this._swipeCooldownUntil = now + 900;
           // the hand relaxing after a palm swipe folds finger by finger and
           // completes a "fist" a second later (field: photo opened twice) —
@@ -449,9 +532,17 @@ export class Gestures extends EventTarget {
           this._flickHoldUntil = Math.max(this._flickHoldUntil, now + 700);
           this._samples.length = 0;
           this._relSamples.length = 0;
-          this._emit('swipe', { axis: 'y', dir: dy > 0 ? 'down' : 'up', vy: v.vy, pure: true });
+          this._emit('swipe', { axis: 'y', dir: sdirY, vy: v.vy, pure: true });
         }
       }
+    } else if (!this.grabbing && !this._fistHeld && !this.calmActs &&
+        this._samples.length > 3 && now <= this._swipeCooldownUntil) {
+      // the invisible half of "unstable": a real stroke landing in a silent
+      // window. Displacement over the 300ms sample window is stroke enough.
+      const s0 = this._samples[0];
+      const dxm = this.cursor.x - s0.x, dym = this.cursor.y - s0.y;
+      if (Math.abs(dym) > window.innerHeight * 0.18 && Math.abs(dym) > Math.abs(dxm) * 1.6)
+        this._note('swipe ✗cooldown', `${Math.round(this._swipeCooldownUntil - now)}ms`);
     }
   }
 

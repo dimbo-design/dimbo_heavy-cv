@@ -360,19 +360,29 @@ function boot() {
     }
   });
 
+  const gctx = () => app.lb ? 'lightbox' : app.spaceId ? 'chapter:' + app.spaceId : app.state;
+  const jline = (line) => {
+    app.glog.push(line);
+    if (app.glog.length > 6) app.glog.shift();
+    app.glogFull.push(line);
+    if (app.glogFull.length > 500) app.glogFull.shift();
+  };
   for (const ev of ['enter', 'leave', 'grabstart', 'grabend', 'tap', 'swipe', 'flick', 'spreadstart', 'spreadend', 'clench', 'unclench']) {
     gestures.addEventListener(ev, (e) => {
       const h = gestures.hand;
-      const line = `${(performance.now() / 1000).toFixed(1)}s ${ev}` +
+      jline(`${(performance.now() / 1000).toFixed(1)}s ${ev}` +
         `${e.detail?.dir ? ' ' + e.detail.dir : ''}` +
         `${h ? `  pinch ${h.pinch.toFixed(2)} size ${h.size.toFixed(2)}` : ''}` +
-        `  [${app.lb ? 'lightbox' : app.spaceId ? 'chapter:' + app.spaceId : app.state}]`;
-      app.glog.push(line);
-      if (app.glog.length > 6) app.glog.shift();
-      app.glogFull.push(line);
-      if (app.glogFull.length > 500) app.glogFull.shift();
+        `${e.detail?.info ? `  ${e.detail.info}` : ''}` +
+        `  [${gctx()}]`);
     });
   }
+  // the journal of refusals: near-misses and dead acts, each named after the
+  // gate that said no — the field loop was blind to failed attempts before
+  gestures.addEventListener('note', (e) => {
+    jline(`${(performance.now() / 1000).toFixed(1)}s ${e.detail.tag}` +
+      `${e.detail.info ? ' ' + e.detail.info : ''}  [${gctx()}]`);
+  });
 
   gestures.addEventListener('enter', () => document.body.classList.add('hand-on'));
   gestures.addEventListener('leave', () => {
@@ -583,6 +593,7 @@ function openSpace(id) {
   // sideways flicks exist only where something moves sideways — on strip-less
   // right chapters a diagonal snap must fall through to the vertical reading
   app.gestures.flickXEnabled = (node.pose?.x ?? 1) >= 0;
+  syncPalmVocab();
   renderSpaceContent(node);
   app.scroll.y = 0; app.scroll.target = 0; app.scroll.vel = 0; app.scroll.over = 0;
   app.pageX = 0; app.pageXVel = 0;
@@ -638,6 +649,7 @@ function closeSpace() {
   app.drag = null;
   app.gestures.flickXEnabled = false;
   closeLightbox();
+  syncPalmVocab();
   document.body.classList.remove('space-open');
   app.field.setPose(null);
   applyCadence();
@@ -777,6 +789,18 @@ function onSpreadMove({ scale }) {
 // at the DETECTION level: a silenced swipe still poisons cooldowns
 function syncCalm() {
   app.gestures.calmActs = !!(app.lb && app.lb.zoom > 1.05);
+}
+
+// the same law across screens: each palm/fist act is DETECTABLE only where
+// it means something. A dead palm-down inside a chapter used to fire as a
+// swipe main ignored — and its cooldowns starved the very next real stroke
+// (the "unstable scroll" of the cold test). Present: dwell only.
+function syncPalmVocab() {
+  const g = app.gestures;
+  g.swipeUpEnabled = !app.lb && !!app.spaceId;   // the sheet rides up — read on
+  g.swipeDownEnabled = !!app.lb;                 // the palm lets the photo go
+  g.clenchEnabled = !!(app.spaceId || app.lb);   // the fist takes / holds
+  g.unclenchEnabled = !!app.lb;                  // the open palm releases
 }
 
 function onSpreadEnd() { /* zoom applies live; nothing to finalize */ }
@@ -985,6 +1009,7 @@ function openLightbox(fig) {
   document.body.classList.add('lb-open');
   app.gestures.spreadEnabled = true;
   app.gestures.flickXEnabled = true;    // sideways flicks walk the photos
+  syncPalmVocab();
   flipFrom(fig);
 }
 
@@ -1102,6 +1127,7 @@ function closeLightbox() {
   // back to the chapter's own rule: sideways flicks only where strips live
   app.gestures.flickXEnabled =
     !!app.spaceId && !document.body.classList.contains('space-right');
+  syncPalmVocab();
   document.body.classList.remove('lb-open');
 }
 
