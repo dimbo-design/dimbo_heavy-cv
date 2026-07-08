@@ -272,7 +272,7 @@ function boot() {
       if (!app.glyphExitAt) {
         app.glyphExitAt = nowD + 460;
         field.setTargets({ coherence: 0.18 });
-        field.pulse(1.0);                 // the words burst apart
+        field.pulse(0.25);                // the words let go with a light burst
         return;
       }
       if (nowD < app.glyphExitAt) return;
@@ -282,8 +282,9 @@ function boot() {
       if (app.state === 'present') {
         field.setTargets({ coherence: CONFIG.coherence.present });
       }
-      field.pulse(0.32, 0, -1.7);         // the body returns: a soft wave from the torso
-      field.setDepth(data, width, height, 900);
+      field.pulse(0.08, 0, -1.7);         // a whisper of a wave from the torso
+      // the body paints back in from the torso outward — the radial reveal
+      field.setDepth(data, width, height, 900, { x: 0, y: -1.7 });
       app.lastDepth = { data, width, height };
       return;
     }
@@ -328,7 +329,7 @@ function boot() {
       field.setTargets({ coherence: 0.18 });
       setTimeout(() => {
         field.showGlyph(sgn === 'fack' ? 'F@CK\nYOU' : 'PEACE');
-        field.pulse(0.3);                 // the words bloom lightly
+        field.pulse(0.08);                // a quarter-strength stylistic twist
         if (app.state === 'present') {
           field.setTargets({ coherence: CONFIG.coherence.present });
         }

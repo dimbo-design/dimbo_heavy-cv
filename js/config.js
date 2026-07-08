@@ -12,6 +12,7 @@ export const CONFIG = {
   plane: { width: 10.4, height: 7.8 },
   depthAmp: 4.4,                          // z extrusion of the depth form
   pointPx: 4.1,                           // base point size (css px before depth factor)
+  micro: 0,                               // formed-body micro-life (0 = statuesque)
 
   camera: { fov: 40, z: 13.5 },
 
@@ -82,3 +83,18 @@ export const CONFIG = {
 
   pump: { minIntervalMs: 70 },
 };
+
+// ---- quality experiment knobs (URL params, defaults untouched) ----------
+// ?grid=216   → 216×162 particles (4:3 kept, clamped 120..300). GPU-cheap:
+//               one draw call either way; the inference cost is unaffected.
+// ?micro=0.4  → a whisper of depth shimmer on the formed body (0..1).
+// Judge with the fps line in ?debug telemetry before adopting as default.
+try {
+  const q = new URLSearchParams(location.search);
+  const gp = parseInt(q.get('grid'), 10);
+  if (gp >= 120 && gp <= 300) {
+    CONFIG.grid = { cols: gp, rows: Math.round(gp * 0.75) };
+  }
+  const mp = parseFloat(q.get('micro'));
+  if (mp >= 0 && mp <= 1) CONFIG.micro = mp;
+} catch (_) { /* non-browser context (tests) */ }

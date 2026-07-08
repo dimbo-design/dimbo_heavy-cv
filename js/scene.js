@@ -17,6 +17,9 @@ const VERT = /* glsl */`
   uniform float uExhale;       // departure: the form breathes out and scatters
   uniform float uPulse;        // directed radial accent (glyph transitions)
   uniform vec2 uPulseO;        // ...and where it radiates from (torso, centre)
+  uniform float uMixRadial;    // 1 = the crossfade travels as a radial wave
+  uniform vec2 uMixO;          // ...from this origin (group space)
+  uniform float uMicro;        // formed-state micro-life (0 = statuesque)
   varying float vD;
   varying float vGate;
   varying float vEdge;
@@ -24,7 +27,15 @@ const VERT = /* glsl */`
 
   void main() {
     vec2 suv = vec2(1.0 - uv.x, 1.0 - uv.y);   // mirror x, image y is top-down
-    float d = mix(texture2D(uDepthA, suv).r, texture2D(uDepthB, suv).r, uMix);
+    // the crossfade can travel as a WAVE from an origin (glyph reveals:
+    // points near the origin transition first, size and glow follow the
+    // depth they inherit — "painting in" rather than a uniform dissolve)
+    float m = uMix;
+    if (uMixRadial > 0.5) {
+      float nd = distance(vec2((uv.x - 0.5) * uPlane.x, (uv.y - 0.5) * uPlane.y), uMixO) / 6.4;
+      m = smoothstep(nd, nd + 0.42, uMix * 1.5);
+    }
+    float d = mix(texture2D(uDepthA, suv).r, texture2D(uDepthB, suv).r, m);
 
     vec3 formed = vec3((uv.x - 0.5) * uPlane.x,
                        (uv.y - 0.5) * uPlane.y,
@@ -39,6 +50,9 @@ const VERT = /* glsl */`
 
     vec3 p = mix(drift, formed, uCoherence);
     p.z += sin(uTime * 0.4 + aRand * 6.28318) * 0.07 * (1.0 - uCoherence);
+    // optional micro-life on the FORMED body (experiment knob ?micro=0..1):
+    // a whisper of depth shimmer, never lateral — lateral reads as jitter
+    p.z += sin(uTime * 0.55 + aRand * 6.28318) * 0.09 * uCoherence * uMicro;
 
     // the exhale: a radial breath outward as the visitor's imprint lets go
     p.xy *= 1.0 + uExhale * (0.14 + 0.12 * aRand);
@@ -162,6 +176,9 @@ export class Field {
       uExhale:    { value: 0 },
       uPulse:     { value: 0 },
       uPulseO:    { value: new THREE.Vector2(0, 0) },
+      uMixRadial: { value: 0 },
+      uMixO:      { value: new THREE.Vector2(0, 0) },
+      uMicro:     { value: CONFIG.micro },
       uHand:      { value: new THREE.Vector3(0, 0, 0) },
     };
 
@@ -279,7 +296,11 @@ export class Field {
     };
   }
 
-  setDepth(data, w, h, expectedIntervalMs) {
+  setDepth(data, w, h, expectedIntervalMs, radialFrom) {
+    // radialFrom {x, y}: this one crossfade travels as a wave from a point
+    // (glyph reveals); without it the blend is uniform, as always
+    this.uniforms.uMixRadial.value = radialFrom ? 1 : 0;
+    if (radialFrom) this.uniforms.uMixO.value.set(radialFrom.x, radialFrom.y);
     // B becomes the old frame, A the new one; uMix eases 0 → 1 (B→A? see shader: mix(A,B,uMix))
     // Shader mixes A→B with uMix, so: B = fresh, A = previous, uMix runs 0→1.
     const prev = this.texA;
@@ -340,7 +361,8 @@ export class Field {
       const grain = ((x * 73 + y * 149) % 13) / 12 * 44;
       d[i] = 158 + swell + grain;
     }
-    this.setDepth(d, W, H, 900);   // assemble slowly, like a body arriving
+    // assemble slowly, painting in from the centre outward
+    this.setDepth(d, W, H, 900, { x: 0, y: 0 });
   }
 
   setTargets({ coherence, opacity, progress }) {
