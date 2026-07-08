@@ -197,7 +197,7 @@ const app = {
   pointer: null,            // fingertip of the REFLECTION, screen px (main screen)
   lastDepth: null,
   glyphUntil: 0,                // the form is briefly words (the easter egg)
-  glyphWasOn: false,
+  glyphWasOn: false, glyphExitAt: 0, glyphExitHold: 0,
   signFrames: 0, signLast: null, signCooldownUntil: 0,
   handAliveAt: 0, handAnchor: null,   // dwell trusts only a hand that has moved
   hold: { p: 0, target: null, until: 0 },
@@ -260,22 +260,33 @@ function boot() {
   }, 500);
 
   engine.addEventListener('depth', (e) => {
-    if (performance.now() < app.glyphUntil) return;   // the words hold the stage
+    const nowD = performance.now();
+    if (nowD < app.glyphUntil) return;           // the words hold the stage
     const { data, width, height, stats } = e.detail;
     if (app.glyphWasOn) {
-      // the words let go the way they arrived: scatter, then the body
-      // reassembles out of the drift while depth crossfades underneath
+      // the words let go the way they arrived, in strict order: scatter
+      // first (depth still frozen), then ONE slow crossfade back to the
+      // body — and the freeze holds until that crossfade has finished,
+      // or the very next regular frame stomps it at fast tempo (the
+      // "abrupt return" Dmitry caught)
+      if (!app.glyphExitAt) {
+        app.glyphExitAt = nowD + 460;
+        field.setTargets({ coherence: 0.18 });
+        return;
+      }
+      if (nowD < app.glyphExitAt) return;
       app.glyphWasOn = false;
-      field.setTargets({ coherence: 0.18 });
-      setTimeout(() => {
-        if (app.state === 'present') {
-          field.setTargets({ coherence: CONFIG.coherence.present });
-        }
-      }, 420);
+      app.glyphExitAt = 0;
+      app.glyphExitHold = nowD + 950;
+      if (app.state === 'present') {
+        field.setTargets({ coherence: CONFIG.coherence.present });
+      }
       field.setDepth(data, width, height, 900);
-    } else {
-      field.setDepth(data, width, height, engine.inferMs);
+      app.lastDepth = { data, width, height };
+      return;
     }
+    if (nowD < app.glyphExitHold) return;        // let the slow crossfade finish
+    field.setDepth(data, width, height, engine.inferMs);
     app.lastDepth = { data, width, height };     // texture copies; safe to keep
     signals.feed(stats, performance.now());
   });
