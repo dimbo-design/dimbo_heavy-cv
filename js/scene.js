@@ -20,6 +20,7 @@ const VERT = /* glsl */`
   uniform float uMixRadial;    // 1 = the crossfade travels as a radial wave
   uniform vec2 uMixO;          // ...from this origin (group space)
   uniform float uMicro;        // formed-state micro-life (0 = statuesque)
+  uniform vec2 uGlyphPar;      // the words alone may sway with a lean
   varying float vD;
   varying float vGate;
   varying float vEdge;
@@ -63,6 +64,9 @@ const VERT = /* glsl */`
     // the body returns with a soft wave from the torso)
     p.xy = uPulseO + (p.xy - uPulseO) * (1.0 + uPulse * (0.16 + 0.14 * aRand));
     p.z += uPulse * (aRand - 0.5) * 0.9;
+
+    // glyph parallax: the words sway with the visitor's lean (form never does)
+    p.xy += uGlyphPar;
 
     // the hand touches the fabric: particles rise toward it
     float hd = distance(p.xy, uHand.xy);
@@ -179,6 +183,7 @@ export class Field {
       uMixRadial: { value: 0 },
       uMixO:      { value: new THREE.Vector2(0, 0) },
       uMicro:     { value: CONFIG.micro },
+      uGlyphPar:  { value: new THREE.Vector2(0, 0) },
       uHand:      { value: new THREE.Vector3(0, 0, 0) },
     };
 
@@ -389,6 +394,22 @@ export class Field {
     this.uniforms.uPulseO.value.set(ox, oy);
   }
 
+  // the words alone sway with a lean; eased here so the swing is silk
+  setGlyphParallax(x, y) {
+    this._glyphParX = x;
+    this._glyphParY = y;
+  }
+
+  // refresh the crossfade's TARGET in place: the returning body stays LIVE
+  // without restarting the travelling wave (a stop-frame return read as a
+  // freeze followed by a jump — Dmitry's catch)
+  updateLiveB(data, w, h) {
+    const tex = this.texB;
+    if (tex.image.width !== w || tex.image.height !== h) return;
+    tex.image.data.set(data);
+    tex.needsUpdate = true;
+  }
+
   // posture: 0 = close/upright, 1 = leaned back — the form breathes
   // slower and a touch deeper for a reading visitor. Never more than that.
   setPosture(relax) { this._relaxT = clamp01(relax); }
@@ -458,6 +479,10 @@ export class Field {
     this._pulse *= Math.exp(-dt * 2.0);
     if (this._pulse < 0.003) this._pulse = 0;
     u.uPulse.value = this._pulse;
+
+    const gp = u.uGlyphPar.value;
+    gp.x += ((this._glyphParX || 0) - gp.x) * (1 - Math.exp(-dt * 3.2));
+    gp.y += ((this._glyphParY || 0) - gp.y) * (1 - Math.exp(-dt * 3.2));
 
     // hand touch eases toward its target
     const hv = u.uHand.value;

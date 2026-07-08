@@ -114,6 +114,19 @@ faster), 11 fps while reading a chapter, 6 fps with nobody in frame; hands at
 at half rate. The shader's depth-map crossfade makes the low cadence
 invisible.
 
+### Experiment knobs
+
+Two URL parameters for probing the quality headroom on your hardware —
+defaults stay untouched; judge with the fps line in `?debug` telemetry:
+
+- `?grid=216` — particle lattice density (120–300, 4:3 kept; **176 is the
+  default**). GPU-cheap either way — one draw call — and the neural depth
+  cost does not depend on the point count at all.
+- `?micro=0.4` — a whisper of depth shimmer on the formed body (0–1;
+  0 is the default: statuesque).
+
+They combine: `?grid=216&micro=0.3&debug`.
+
 ## Support
 
 Desktop Chromium browsers (Chrome / Edge / Arc / Opera, WebGPU) are the

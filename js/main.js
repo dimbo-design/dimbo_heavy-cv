@@ -270,9 +270,10 @@ function boot() {
       // or the very next regular frame stomps it at fast tempo (the
       // "abrupt return" Dmitry caught)
       if (!app.glyphExitAt) {
-        app.glyphExitAt = nowD + 460;
+        // 720ms: the words get time to truly dissolve before the body returns
+        app.glyphExitAt = nowD + 720;
         field.setTargets({ coherence: 0.18 });
-        field.pulse(0.25);                // the words let go with a light burst
+        field.pulse(0.14);                // the words let go with a light burst
         return;
       }
       if (nowD < app.glyphExitAt) return;
@@ -282,13 +283,19 @@ function boot() {
       if (app.state === 'present') {
         field.setTargets({ coherence: CONFIG.coherence.present });
       }
-      field.pulse(0.08, 0, -1.7);         // a whisper of a wave from the torso
+      field.pulse(0.05, 0, -1.7);         // a whisper of a wave from the torso
       // the body paints back in from the torso outward — the radial reveal
       field.setDepth(data, width, height, 900, { x: 0, y: -1.7 });
       app.lastDepth = { data, width, height };
       return;
     }
-    if (nowD < app.glyphExitHold) return;        // let the slow crossfade finish
+    if (nowD < app.glyphExitHold) {
+      // the wave keeps travelling, but its TARGET stays live — no stop-frame
+      // of the visitor, no jump when the stream resumes
+      field.updateLiveB(data, width, height);
+      app.lastDepth = { data, width, height };
+      return;
+    }
     field.setDepth(data, width, height, engine.inferMs);
     app.lastDepth = { data, width, height };     // texture copies; safe to keep
     signals.feed(stats, performance.now());
@@ -329,7 +336,7 @@ function boot() {
       field.setTargets({ coherence: 0.18 });
       setTimeout(() => {
         field.showGlyph(sgn === 'fack' ? 'F@CK\nYOU' : 'PEACE');
-        field.pulse(0.08);                // a quarter-strength stylistic twist
+        field.pulse(0.05);                // a whisper-strength stylistic twist
         if (app.state === 'present') {
           field.setTargets({ coherence: CONFIG.coherence.present });
         }
@@ -1167,6 +1174,12 @@ function loopBody(t) {
       app.pointer = handActive ? reflectionPointer() : null;
       // the scene does not turn. period — stability beat liveliness
       const headX = clamp((signals.cx - 0.5) * 2 * CONFIG.focus.gain, -1.6, 1.6);
+      // the words are independent of the 3D form — the ONE thing the camera
+      // always reads (a lean) may move them a little. The form itself never
+      // turns; this parallax lives only while the glyph holds the stage.
+      field.setGlyphParallax(
+        t < app.glyphUntil ? -headX * 0.22 : 0,
+        t < app.glyphUntil ? (0.5 - signals.cy) * 0.3 : 0);
       const nodesDelay = returning ? CONFIG.reveal.nodesMs * 0.45 : CONFIG.reveal.nodesMs;
       if (!app.nodesShown && t - app.presentSince > nodesDelay) revealNodes();
       if (app.nodesShown && !app.spaceId) updateNodes(headX, handActive);
