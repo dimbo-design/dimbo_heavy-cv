@@ -258,15 +258,15 @@ export class Gestures extends EventTarget {
 
     // ---- cursor: a stable anatomical point. Switching between fingertip
     // and palm centre made the cursor hop whenever 'pointing' flickered —
-    // so the blend WEIGHT glides instead (no hop, a lean): a relaxed hand
-    // reads half-and-half, but a pointing hand aims with its fingertip.
-    // Field log 02:01: with a fixed 0.55 blend the palm outvoted the finger
-    // — the node nearest the HAND got picked, not the one pointed at.
-    const wT = !this.grabbing && h.pointing ? 0.85 : 0.55;
-    this._idxW = (this._idxW ?? 0.55) + (wT - (this._idxW ?? 0.55)) * 0.12;
+    // a fixed blend keeps one continuous point regardless of hand shape.
+    // (A pointing-weighted lean was tried and field-reverted 09.07: the
+    // 'pointing' flag flutters while aiming AT the screen — foreshortening
+    // wrecks the extension metric — and the wandering weight made holds
+    // less stable than the palm bias it was fixing. The aim-vs-palm story
+    // needs a recorded trace, not a guess.)
     const src = this.grabbing ? h.pinchPoint : {
-      x: h.index.x * this._idxW + h.palm.x * (1 - this._idxW),
-      y: h.index.y * this._idxW + h.palm.y * (1 - this._idxW),
+      x: h.index.x * 0.55 + h.palm.x * 0.45,
+      y: h.index.y * 0.55 + h.palm.y * 0.45,
     };
     const vw = window.innerWidth, vh = window.innerHeight;
     const x = ((1 - src.x) - 0.5) * this.gain * vw + vw / 2;
@@ -467,9 +467,13 @@ export class Gestures extends EventTarget {
       // an honest downward finger stroke that lands in a silent window is
       // exactly the invisible failed attempt the field loop could not see
       const strokeY = dry > 0.15 && dry > Math.abs(drx) * 1.4;
+      // the two-hands mute exists for ZOOMING hands (they sweep, and must
+      // not flip photos) — so it lives only where the zoom itself lives.
+      // In a chapter a phantom second blob used to kill every snap (field
+      // log 02:19: ✗muted 2hands nineteen times, "палец перестал реагировать")
       const mutedBy = this._fistHeld ? 'fist' : this.calmActs ? 'calm' :
         now <= this._flickHoldUntil ? `hold ${Math.round(this._flickHoldUntil - now)}ms` :
-        (h2 && h2.size > 0.08) ? '2hands' : null;
+        (this.spreadEnabled && h2 && h2.size > 0.08) ? '2hands' : null;
       if (mutedBy) {
         if (strokeY) this._note('flick↓ ✗muted', mutedBy);
       } else {
