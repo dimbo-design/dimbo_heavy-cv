@@ -116,6 +116,8 @@ function summarize(lm) {
     palm: { x: palm.x, y: palm.y },
     index: { x: lm[8].x, y: lm[8].y },
     thumb: { x: lm[4].x, y: lm[4].y },   // the two-hand heart reads on it
+    wrist: { x: lm[0].x, y: lm[0].y },   // the anchor candidate: the one
+                                         // point finger motion can't drag
     pinchPoint: { x: (lm[4].x + lm[8].x) / 2, y: (lm[4].y + lm[8].y) / 2 },
     size, pinch, open, sign,
     pointing: idxExt > 1.15 && midExt < 1.0,

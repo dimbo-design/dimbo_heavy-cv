@@ -376,7 +376,10 @@ function boot() {
       }, 420);
     }
     if (app.recOn && h) {
-      app.rec.push(`${(performance.now() / 1000).toFixed(2)} ${h.pinch.toFixed(2)} ${h.open.toFixed(2)} ${h.size.toFixed(3)} ${h.palm.x.toFixed(3)} ${h.palm.y.toFixed(3)} ${h.index.x.toFixed(3)} ${h.index.y.toFixed(3)}`);
+      // wrist rides along (v25.3): the palm CENTROID is 4/5 knuckles and
+      // follows the fingers — the wrist is the one point that doesn't;
+      // the anchor experiment reads on these two columns
+      app.rec.push(`${(performance.now() / 1000).toFixed(2)} ${h.pinch.toFixed(2)} ${h.open.toFixed(2)} ${h.size.toFixed(3)} ${h.palm.x.toFixed(3)} ${h.palm.y.toFixed(3)} ${h.index.x.toFixed(3)} ${h.index.y.toFixed(3)} ${h.wrist ? `${h.wrist.x.toFixed(3)} ${h.wrist.y.toFixed(3)}` : '- -'}`);
       if (app.rec.length > 1400) app.rec.shift();
     }
   });
@@ -1783,7 +1786,7 @@ function copyLog() {
 
 function copyRec() {
   const trace = app.rec && app.rec.length
-    ? ['--- trace: t pinch open size palmX palmY indexX indexY', ...app.rec]
+    ? ['--- trace: t pinch open size palmX palmY indexX indexY wristX wristY', ...app.rec]
     : ['--- trace: пусто (⌥R, движение, ⌥R)'];
   copyText(logHead().concat(trace).join('\n'), 'debug-copyrec', 'copy rec (⌥T)');
 }
