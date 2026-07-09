@@ -613,3 +613,39 @@ body.is-mobile { overflow-y: auto; overflow-x: hidden; }
   top: 20px !important; left: auto !important; right: 16px !important;
 }
 .is-mobile #lightbox { background: rgba(10, 10, 13, 0.94); }
+
+/* mobile note under the role: the full experience lives on desktop */
+#mobile-note { display: none; }
+.is-mobile #mobile-note {
+  display: block; margin-top: 20px; padding-top: 14px;
+  border-top: 1px solid var(--line);
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em;
+  line-height: 1.8; color: var(--ink-dim); max-width: 46ch;
+}
+
+/* mobile chapters read as modal sheets: a fixed bar holds the facet's
+   name and the close cross while the content scrolls beneath */
+#space-bar { display: none; }
+.is-mobile #space-bar {
+  display: flex; align-items: center;
+  position: fixed; top: 0; left: 0; right: 0; height: 54px;
+  padding: 0 60px 0 22px; z-index: 40;
+  background: rgba(10, 10, 13, 0.92);
+  border-bottom: 1px solid var(--line);
+  font-family: var(--mono); font-size: 12px; letter-spacing: 0.16em;
+  color: var(--ink);
+  opacity: 0; transition: opacity 0.4s; pointer-events: none;
+}
+body.is-mobile.space-open #space-bar { opacity: 1; }
+.is-mobile #space-close {
+  top: 11px !important; right: 14px !important; z-index: 41;
+}
+.is-mobile #space-inner { padding-top: 84px !important; }
+/* the corners yield to the modal bar: dimbo and the language switch would
+   double the header and sit on the cross */
+body.is-mobile.space-open .corner.tl,
+body.is-mobile.space-open .corner.tr {
+  opacity: 0; pointer-events: none; transition: opacity 0.3s;
+}
+/* on touch there is no dwell to bloom the cross — it must simply be seen */
+.is-mobile #space-close svg line { stroke: var(--ink-dim); }

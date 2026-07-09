@@ -694,6 +694,8 @@ function openSpace(id) {
 // The cross is re-parented into the scrolling sheet on every render:
 // innerHTML wipes children, so it steps out, waits, and steps back in.
 function renderSpaceContent(node) {
+  const bt = $('space-bar-t');
+  if (bt) bt.textContent = node.label[lang];   // the mobile modal bar
   const inner = $('space-inner');
   const sc = $('space-close');
   $('space').appendChild(sc);                 // step out before the wipe
@@ -1716,6 +1718,7 @@ function renderStatic() {
   setText('invite-action-t', UI.invite.a[lang]);
   setText('invite-s', UI.invite.s[lang]);
   setText('invite-s2', UI.invite.s2[lang]);
+  setText('mobile-note', UI.mobileNote[lang]);
 
   setText('denied-h', UI.denied.h[lang]);
   setText('denied-s', UI.denied.s[lang]);

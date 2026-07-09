@@ -288,6 +288,12 @@ export const UI = {
           en: 'the camera runs locally — nothing ever leaves your machine' },
   },
 
+  // mobile only: the full experience lives on desktop — say it plainly
+  mobileNote: {
+    ru: 'сайт задуман под десктоп: там камера собирает ваше отражение из частиц и интерфейсом управляют руки. читать можно и здесь — вайб живёт на компьютере',
+    en: 'this site is built for desktop: there the camera assembles your reflection from particles, and hands drive the interface. reading works here — the vibe lives on a computer',
+  },
+
   denied: {
     h:  { ru: 'Договорились. Интерфейс останется спящим.',
           en: 'Fair enough. The interface will stay asleep.' },
