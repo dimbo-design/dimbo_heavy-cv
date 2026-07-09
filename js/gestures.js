@@ -520,8 +520,14 @@ export class Gestures extends EventTarget {
         // fake even the whip's unfurl (Δo swings to 1.26 on a drooping,
         // foreshortened hand — field log 03:07). A real snap concentrates
         // its travel in a burst: the 130ms rel-displacement is the tell.
+        // the polite extension floor is 0.14, not 0.06: a hand REACHING FOR
+        // A PINCH also dives its index fast off a parked palm (field log
+        // 03:33 — reach→false step-back→pinch blocked→reach again, a cycle),
+        // but a reach FOLDS (Δo noise −0.2…+0.05) while a snap UNFURLS
+        // (+0.25 recorded minimum; instantaneous pinch can't separate them —
+        // his canonical snap fires at pinch 0.24, right where a reach lives)
         if (strokeY && r0.o > 0.4 && this._relDisp > 0.13 && (
-            (palmDisp < 0.06 && dopen > 0.06 && palmDrift < 0.09) ||
+            (palmDisp < 0.06 && dopen > 0.14 && palmDrift < 0.09) ||
             (palmDisp < dry * 0.45 && dopen > 1.1))) {
           axis = 'y'; dir = 'down';
           vel = (dry * window.innerHeight * this.gain) / rdt;
@@ -537,7 +543,7 @@ export class Gestures extends EventTarget {
           else if (this._relDisp <= 0.13) this._note('flick↓ ✗limp', `rel ${this._relDisp.toFixed(2)}`);
           else if (palmDisp >= 0.06 && dopen <= 1.1) this._note('flick↓ ✗palm-led', `pd ${palmDisp.toFixed(2)} Δo ${dopen.toFixed(2)}`);
           else if (palmDisp >= dry * 0.45) this._note('flick↓ ✗palm-moved', `${palmDisp.toFixed(3)} dry ${dry.toFixed(2)}`);
-          else if (palmDisp < 0.06 && dopen > 0.06 && palmDrift >= 0.09)
+          else if (palmDisp < 0.06 && dopen > 0.14 && palmDrift >= 0.09)
             this._note('flick↓ ✗palm-drift', palmDrift.toFixed(3));
           else this._note('flick↓ ✗no-extension', `Δo ${dopen.toFixed(2)}`);
         }
@@ -626,8 +632,11 @@ export class Gestures extends EventTarget {
         // The closing brush (down, lightbox) keeps the full ceremony.
         const oMin = Math.min(...this._samples.map((s) => s.o));
         const oMax = Math.max(...this._samples.map((s) => s.o));
+        // ...and one smeared pinch-frame is forgiven: tracking flutters a
+        // single frame below 0.3 inside honest sweeps (field log 03:33:
+        // real reading-pushes died as ✗not-pure with healthy o ranges)
         const pureY = sdirY === 'up'
-          ? oMax > 1.1 && this._samples.every((s) => s.p > 0.3)
+          ? oMax > 1.1 && this._samples.filter((s) => s.p <= 0.3).length <= 1
           : this._samples.every((s) => s.o > 1.05 && s.p > 0.45);
         // the speed floor is directional too: down CLOSES (a photo) and
         // demands decisiveness; up only reads on, and his graceful sweep
@@ -663,11 +672,11 @@ export class Gestures extends EventTarget {
           this._note(`swipe ✗${sdirY}`, 'dead-here');
         } else {
           this._palmMom = sdirY === 'up' ? { vel: Math.abs(v.vy), until: now + 2200 } : null;
-          // 450, not 900: same-direction repeats are safe (returns are
-          // consumed by ↩home and dead-here, never by this cooldown), and
-          // the field showed every second reading-stroke of a fast rhythm
-          // dying as ✗cooldown
-          this._swipeCooldownUntil = now + 450;
+          // 700: one sweep, one word — at 450 a long push re-qualified out
+          // of its own continuation and double-stepped (field log 03:33:
+          // swipe-up pairs 500–600ms apart); his natural re-stroke rhythm
+          // sits at 1.2–1.5s, comfortably clear
+          this._swipeCooldownUntil = now + 700;
           // the hand relaxing after a palm swipe folds finger by finger and
           // completes a "fist" a second later (field: photo opened twice) —
           // the fist listens again only after the hand has truly settled
