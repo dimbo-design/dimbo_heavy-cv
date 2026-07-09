@@ -22,7 +22,8 @@ const $ = (id) => document.getElementById(id);
 
 const isMobile =
   /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
-  (navigator.maxTouchPoints > 1 && !matchMedia('(pointer: fine)').matches);
+  (navigator.maxTouchPoints > 1 && !matchMedia('(pointer: fine)').matches) ||
+  window.innerWidth < 700;   // below the gate the camera never starts
 
 let lang = localStorage.getItem('lang') ||
   ((navigator.language || 'en').toLowerCase().startsWith('ru') ? 'ru' : 'en');
@@ -219,11 +220,47 @@ if (new URLSearchParams(location.search).has('debug')) {
 }
 
 if (isMobile) {
-  document.body.classList.add('is-mobile');
-  renderStatic();
-  $('mobile').classList.remove('hidden');
+  mobileBoot();
 } else {
   boot();
+}
+
+// the mobile DEGRADATION (owner's call, 09.07): not a dead-end — the same
+// portfolio, reflowed. Below the gate the camera pipeline never starts and
+// no models download; the particle field stays as a dormant backdrop (one
+// draw call — and wrapped: a failing WebGL must not fail the portfolio).
+// Navigation is native: taps land on the same click fallbacks the mouse
+// uses, the finger scrolls real overflow. Chapters, galleries, the
+// lightbox and both languages all work; only the mirror is absent.
+function mobileBoot() {
+  document.body.classList.add('is-mobile', 'named');
+  renderStatic();
+  app.state = 'mobile';
+  hide('invite');   // the camera invitation belongs to the mirror tiers
+  try {
+    const field = new Field($('scene'));
+    app.field = field;
+    window.addEventListener('resize', () => field.resize());
+    const tick = () => { field.frame(1 / 60); requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+  } catch (_) { /* no WebGL: the dark stays plain, the portfolio stays open */ }
+  buildNodes();
+  revealNodes();
+  document.addEventListener('click', (e) => {
+    if (app.lb) {
+      const r = $('lb-img').getBoundingClientRect();
+      if (e.clientX < r.left || e.clientX > r.right ||
+          e.clientY < r.top || e.clientY > r.bottom) closeLightbox();
+      else lightboxStep(e.clientX > r.left + r.width / 2 ? 1 : -1);
+      return;
+    }
+    const fig = e.target.closest('#space-inner figure');
+    if (fig) { openLightbox(fig); return; }
+  });
+  $('space-close').addEventListener('click', () => closeSpace());
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { if (app.lb) closeLightbox(); else closeSpace(); }
+  });
 }
 
 function boot() {
@@ -578,6 +615,7 @@ function leavePresent() {
 }
 
 function applyCadence() {
+  if (!app.engine) return;   // mobile: no pipeline to pace
   const present = app.signals?.present;
   const open = !!app.spaceId;
   app.engine.setCadence(present
@@ -626,15 +664,17 @@ function openSpace(id) {
   const node = NODES.find((n) => n.id === id);
   if (!node || app.spaceId === id) return;
   app.spaceId = id;
-  app.signals.panelOpen = true;
-  app.signals.openBaseline = app.signals.baseline;
+  if (app.signals) {
+    app.signals.panelOpen = true;
+    app.signals.openBaseline = app.signals.baseline;
+  }
   app.hold.p = 0;
   app.hold.until = performance.now() + 1200;
 
   document.body.classList.toggle('space-right', (node.pose?.x ?? 1) < 0);
   // sideways flicks exist only where something moves sideways — on strip-less
   // right chapters a diagonal snap must fall through to the vertical reading
-  app.gestures.flickXEnabled = (node.pose?.x ?? 1) >= 0;
+  if (app.gestures) app.gestures.flickXEnabled = (node.pose?.x ?? 1) >= 0;
   syncPalmVocab();
   renderSpaceContent(node);
   app.scroll.y = 0; app.scroll.target = 0; app.scroll.vel = 0; app.scroll.over = 0;
@@ -642,7 +682,7 @@ function openSpace(id) {
   $('space-inner').style.transform = 'translateY(0px)';
 
   document.body.classList.add('space-open');
-  app.field.setPose(node.pose || { x: 0.46, rotY: -0.5, scale: 0.9, dim: 0 });
+  app.field?.setPose(node.pose || { x: 0.46, rotY: -0.5, scale: 0.9, dim: 0 });
   applyCadence();
 }
 
@@ -684,16 +724,18 @@ function positionCloseCross() {
 function closeSpace() {
   if (!app.spaceId) return;
   app.spaceId = null;
-  app.signals.panelOpen = false;
-  app.signals.lastLeanEnd = performance.now();
+  if (app.signals) {
+    app.signals.panelOpen = false;
+    app.signals.lastLeanEnd = performance.now();
+  }
   app.hold.until = performance.now() + 900;
   app.strips = [];
   app.drag = null;
-  app.gestures.flickXEnabled = false;
+  if (app.gestures) app.gestures.flickXEnabled = false;
   closeLightbox();
   syncPalmVocab();
   document.body.classList.remove('space-open');
-  app.field.setPose(null);
+  app.field?.setPose(null);
   applyCadence();
 }
 
@@ -830,7 +872,7 @@ function onSpreadMove({ scale }) {
 // the zoomed state's vocabulary shrinks to fist/pinch/spread/open palm —
 // at the DETECTION level: a silenced swipe still poisons cooldowns
 function syncCalm() {
-  app.gestures.calmActs = !!(app.lb && app.lb.zoom > 1.05);
+  if (app.gestures) app.gestures.calmActs = !!(app.lb && app.lb.zoom > 1.05);
 }
 
 // the same law across screens: each palm/fist act is DETECTABLE only where
@@ -839,6 +881,7 @@ function syncCalm() {
 // (the "unstable scroll" of the cold test). Present: dwell only.
 function syncPalmVocab() {
   const g = app.gestures;
+  if (!g) return;             // mobile: no gesture layer
   g.swipeUpEnabled = !app.lb && !!app.spaceId;   // the sheet rides up — read on
   g.swipeDownEnabled = !!app.lb;                 // the palm lets the photo go
   g.clenchEnabled = !!(app.spaceId || app.lb);   // the fist takes / holds
@@ -1049,8 +1092,10 @@ function openLightbox(fig) {
   };
   renderLightbox();
   document.body.classList.add('lb-open');
-  app.gestures.spreadEnabled = true;
-  app.gestures.flickXEnabled = true;    // sideways flicks walk the photos
+  if (app.gestures) {
+    app.gestures.spreadEnabled = true;
+    app.gestures.flickXEnabled = true;  // sideways flicks walk the photos
+  }
   syncPalmVocab();
   flipFrom(fig);
 }
@@ -1164,11 +1209,13 @@ function closeLightbox() {
   app.lb = null;
   app.fist = null;
   app.lbCooldownUntil = performance.now() + 800;
-  app.gestures.spreadEnabled = false;
-  app.gestures.calmActs = false;
-  // back to the chapter's own rule: sideways flicks only where strips live
-  app.gestures.flickXEnabled =
-    !!app.spaceId && !document.body.classList.contains('space-right');
+  if (app.gestures) {
+    app.gestures.spreadEnabled = false;
+    app.gestures.calmActs = false;
+    // back to the chapter's own rule: sideways flicks only where strips live
+    app.gestures.flickXEnabled =
+      !!app.spaceId && !document.body.classList.contains('space-right');
+  }
   syncPalmVocab();
   document.body.classList.remove('lb-open');
 }

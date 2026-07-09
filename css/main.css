@@ -561,3 +561,55 @@ body.is-mobile { overflow: auto; }
   #grain { animation: none; }
   .iris-outer, .iris-inner { animation: none; }
 }
+
+/* ── the mobile degradation: the same portfolio, reflowed ─────────────
+   (owner's call, 09.07). Below the gate no camera ever starts; taps land
+   on the mouse fallbacks, the finger scrolls real overflow; the particle
+   field stays as a dormant backdrop. Only the mirror is absent. */
+body.is-mobile { overflow-y: auto; overflow-x: hidden; }
+.is-mobile #identity {
+  position: relative; z-index: 5;   /* above the fixed canvas backdrop */
+  left: auto; bottom: auto;         /* the desktop corner must not leak */
+  opacity: 1; transform: none;
+  padding: 96px 22px 4px; background: none; pointer-events: auto;
+}
+.is-mobile #identity-name { font-size: clamp(34px, 9vw, 44px); }
+.is-mobile #nodes {
+  position: relative; z-index: 5; inset: auto; pointer-events: auto;
+  display: flex; flex-direction: column;
+  padding: 22px 12px 56px;
+}
+.is-mobile .node {
+  position: static; transform: none !important;
+  padding: 16px 10px; gap: 5px;
+  border-bottom: 1px solid var(--line);
+}
+.is-mobile .node:first-child { border-top: 1px solid var(--line); }
+.is-mobile .node .n-bar { display: none; }
+.is-mobile .node .n-sub { opacity: 1; transform: none; white-space: normal; }
+.is-mobile #space-scroll { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.is-mobile #space-inner {
+  width: auto; max-width: 640px;
+  padding: 11vh 22px 16vh !important; margin: 0 !important;
+  transform: none !important;
+}
+.is-mobile #space-scrim { background: rgba(10, 10, 13, 0.96) !important; }
+.is-mobile #space-inner .strip {
+  width: auto; overflow-x: auto; -webkit-overflow-scrolling: touch;
+  cursor: default; margin-right: -22px; padding: 4px 22px 10px 0;
+}
+.is-mobile #space-inner .strip { margin-left: 0 !important; }
+.is-mobile #space-inner .strip img { height: 30vh; max-height: 320px; }
+.is-mobile #space-inner .strip-track { transform: none !important; }
+.is-mobile #cursor, .is-mobile #telemetry, .is-mobile #scroll-hint,
+.is-mobile #mobile { display: none !important; }
+.is-mobile #space-close { padding: 10px; }
+.is-mobile #lightbox figure { max-width: 94vw; }
+.is-mobile #lightbox img { max-width: 94vw; height: auto; max-height: 64vh; }
+/* the close cross rides the title's line on desktop (JS-measured); on the
+   phone that lands past the right edge — it pins to the corner instead */
+.is-mobile #space-close {
+  position: fixed !important;
+  top: 20px !important; left: auto !important; right: 16px !important;
+}
+.is-mobile #lightbox { background: rgba(10, 10, 13, 0.94); }

@@ -136,8 +136,11 @@ They combine: `?grid=216&micro=0.3&debug`.
 
 Desktop Chromium browsers (Chrome / Edge / Arc / Opera, WebGPU) are the
 primary path; Safari and Firefox run via WASM (depth thinks slower, the
-“mind” more pensive, the interface fully alive). Mobile devices get a
-designed dead-end with the contacts.
+“mind” more pensive, the interface fully alive). Mobile devices (and any
+viewport under 700px) get the same portfolio reflowed: the camera pipeline
+never starts, no models download, the particle field stays as a dormant
+backdrop — the chapters, galleries, lightbox and both languages all work
+with taps and native scroll. Only the mirror is absent.
 
 A browser without WebGPU (today's Safari, older hardware) gets a quiet mouse
 mode: the mirror sleeps, but the portfolio is fully open — nodes click,
