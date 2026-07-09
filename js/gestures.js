@@ -505,38 +505,29 @@ export class Gestures extends EventTarget {
         // direction lives in a DIFFERENT family (Dmitry's split): palm swipe
         // up reads on, finger snap down steps back — each family is blind to
         // the other's parasitic motions.
-        // And the snap is itself a FAMILY of exactly TWO templates (the
-        // in-between turned out to be everyone else's strokes — field log
-        // 02:05: a palm-led down-sweep with the fingers leading passed a
-        // blanket relative gate and rained step-backs over his reading):
-        //   polite — the finger works, the palm stands (his first traces);
-        //   whip   — from a half-curl the whole finger unfurls to a FULL
-        //            spread (Δo +1.4…2.2 recorded) and the palm may ride
-        //            along, but the fingertip still travels ~2× the palm.
-        //            The full unfurl is the signature: the relax-open at a
-        //            sweep's tail reaches +0.5…0.9 and kept slipping through
-        //            a 0.5 bar (field log 02:41) — 1.1 sits in the clear
-        //            gap between the two populations.
-        // Direction already excludes the fist-opening parasite (its
-        // fingertips fly UP relative to the palm).
+        // The snap is ONE polite word — the finger works, the palm stands —
+        // and it is judged as a COMPLETED word, not in flight. The WHIP
+        // template is RETIRED by the owner's verdict (09.07, six field
+        // sessions): its signature is geometrically the кистевой мах вниз,
+        // the main parasite («проблема не в параметрах, а в её наличии»).
+        // And retirement alone was not enough: every wide stroke carries a
+        // POLITE PREFIX — its first ~150ms, before the palm starts riding,
+        // photograph as an honest snap (session 5: the мах kept firing
+        // through it). So the verdict falls only when the fingertip has
+        // STOPPED (the word is finished) and the window holds the whole
+        // figure: the palm parked across it and settled 0.7s before it, a
+        // real burst somewhere inside, and a modest honest extension at its
+        // PEAK — a pinch-reach folds (ext≈0), an unfurling hand explodes
+        // (ext>0.6), the snap lives between. Costs ~0.15s of latency; buys
+        // judging gestures instead of their opening frames.
         const palmDisp = Math.hypot(rN.px - r0.px, rN.py - r0.py);
-        // ...and both templates demand the stroke be ALIVE right now: a
-        // relaxed hand lowering slowly accumulates the same dry over the
-        // window (0.2–0.44 recorded) and its openness flaps hard enough to
-        // fake even the whip's unfurl (Δo swings to 1.26 on a drooping,
-        // foreshortened hand — field log 03:07). A real snap concentrates
-        // its travel in a burst: the 130ms rel-displacement is the tell.
-        // the polite extension floor is 0.14, not 0.06: a hand REACHING FOR
-        // A PINCH also dives its index fast off a parked palm (field log
-        // 03:33 — reach→false step-back→pinch blocked→reach again, a cycle),
-        // but a reach FOLDS (Δo noise −0.2…+0.05) while a snap UNFURLS
-        // (+0.25 recorded minimum; instantaneous pinch can't separate them —
-        // his canonical snap fires at pinch 0.24, right where a reach lives)
         const burst = Math.max(this._relDisp,
           ...this._relSamples.map((s) => s.rd || 0));
-        if (strokeY && r0.o > 0.4 && burst > 0.15 && (
-            (palmDisp < 0.06 && dopen > 0.14 && palmDrift < 0.09) ||
-            (palmDisp < dry * 0.45 && dopen > 1.1))) {
+        const inFlight = this._relDisp >= 0.09;
+        const ext = Math.max(...this._relSamples.map((s) => s.o)) - r0.o;
+        if (strokeY && !inFlight && r0.o > 0.4 && burst > 0.15 &&
+            palmDisp < 0.06 && palmDrift < 0.09 &&
+            ext > 0.14 && ext < 0.6) {
           axis = 'y'; dir = 'down';
           vel = (dry * window.innerHeight * this.gain) / rdt;
         } else if (this.flickXEnabled &&
@@ -545,15 +536,16 @@ export class Gestures extends EventTarget {
           axis = 'x'; dir = drx < 0 ? 'right' : 'left';   // frame x is mirrored
           vel = (Math.abs(drx) * window.innerWidth * this.gain) / rdt;
         }
-        if (!axis && strokeY) {
-          // a real stroke, one gate said no — name the gate in the journal
+        if (!axis && strokeY && !inFlight) {
+          // a completed stroke, one gate said no — name it in the journal
+          // (in-flight windows are not judged and not noted: the word is
+          // still being spoken)
           if (r0.o <= 0.4) this._note('flick↓ ✗from-fist', `o ${r0.o.toFixed(2)}`);
           else if (burst <= 0.15) this._note('flick↓ ✗limp', `burst ${burst.toFixed(2)}`);
-          else if (palmDisp >= 0.06 && dopen <= 1.1) this._note('flick↓ ✗palm-led', `pd ${palmDisp.toFixed(2)} Δo ${dopen.toFixed(2)}`);
-          else if (palmDisp >= dry * 0.45) this._note('flick↓ ✗palm-moved', `${palmDisp.toFixed(3)} dry ${dry.toFixed(2)}`);
-          else if (palmDisp < 0.06 && dopen > 0.14 && palmDrift >= 0.09)
-            this._note('flick↓ ✗palm-drift', palmDrift.toFixed(3));
-          else this._note('flick↓ ✗no-extension', `Δo ${dopen.toFixed(2)}`);
+          else if (palmDisp >= 0.06) this._note('flick↓ ✗palm-moved', `pd ${palmDisp.toFixed(2)}`);
+          else if (palmDrift >= 0.09) this._note('flick↓ ✗palm-drift', palmDrift.toFixed(3));
+          else if (ext >= 0.6) this._note('flick↓ ✗whip-shape', `ext ${ext.toFixed(2)}`);
+          else this._note('flick↓ ✗no-extension', `ext ${ext.toFixed(2)}`);
         }
         if (axis) {
           const m = this._mom[axis];
