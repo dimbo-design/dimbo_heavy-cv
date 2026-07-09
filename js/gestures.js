@@ -311,8 +311,13 @@ export class Gestures extends EventTarget {
     // palm sweep parks the palm first while the finger settles down and
     // unfurls, which photographs exactly like a polite snap (field log
     // 02:29: a false step-back rode the tail of almost every down-sweep)
-    this._palmMoveSlow = (this._palmMoveSlow ?? palmMove) +
-      (palmMove - (this._palmMoveSlow ?? palmMove)) * 0.25;
+    // fed only with REAL measurements: the 130ms window's "1" sentinel is a
+    // guard value, not motion — letting it seed the EMA blinded the polite
+    // snap for the first ~1.5s of every hand session
+    if (this._rel130) {
+      this._palmMoveSlow = (this._palmMoveSlow ?? 0) +
+        (palmMove - (this._palmMoveSlow ?? 0)) * 0.12;
+    }
     // a real clench assembles from the WHOLE open palm at once; a hand
     // relaxing after a swipe curls finger by finger, and the last fold
     // used to complete the "fist" and open a photo (field log: clench
@@ -498,17 +503,19 @@ export class Gestures extends EventTarget {
         // 02:05: a palm-led down-sweep with the fingers leading passed a
         // blanket relative gate and rained step-backs over his reading):
         //   polite — the finger works, the palm stands (his first traces);
-        //   whip   — from a half-curl the whole finger unfurls (Δo +1.4…2.2
-        //            recorded, nothing else explodes open like that) and the
-        //            palm may ride along, but the fingertip still travels
-        //            ~2× the palm. The EXPLOSION is the whip's signature —
-        //            a palm sweep opens by +0.3 at best.
+        //   whip   — from a half-curl the whole finger unfurls to a FULL
+        //            spread (Δo +1.4…2.2 recorded) and the palm may ride
+        //            along, but the fingertip still travels ~2× the palm.
+        //            The full unfurl is the signature: the relax-open at a
+        //            sweep's tail reaches +0.5…0.9 and kept slipping through
+        //            a 0.5 bar (field log 02:41) — 1.1 sits in the clear
+        //            gap between the two populations.
         // Direction already excludes the fist-opening parasite (its
         // fingertips fly UP relative to the palm).
         const palmDisp = Math.hypot(rN.px - r0.px, rN.py - r0.py);
         if (strokeY && r0.o > 0.4 && (
-            (palmDisp < 0.06 && dopen > 0.06 && this._palmMoveSlow < 0.03) ||
-            (palmDisp < dry * 0.45 && dopen > 0.5))) {
+            (palmDisp < 0.06 && dopen > 0.06 && this._palmMoveSlow < 0.025) ||
+            (palmDisp < dry * 0.45 && dopen > 1.1))) {
           axis = 'y'; dir = 'down';
           vel = (dry * window.innerHeight * this.gain) / rdt;
         } else if (this.flickXEnabled &&
@@ -520,9 +527,9 @@ export class Gestures extends EventTarget {
         if (!axis && strokeY) {
           // a real stroke, one gate said no — name the gate in the journal
           if (r0.o <= 0.4) this._note('flick↓ ✗from-fist', `o ${r0.o.toFixed(2)}`);
-          else if (palmDisp >= 0.06 && dopen <= 0.5) this._note('flick↓ ✗palm-led', `pd ${palmDisp.toFixed(2)} Δo ${dopen.toFixed(2)}`);
+          else if (palmDisp >= 0.06 && dopen <= 1.1) this._note('flick↓ ✗palm-led', `pd ${palmDisp.toFixed(2)} Δo ${dopen.toFixed(2)}`);
           else if (palmDisp >= dry * 0.45) this._note('flick↓ ✗palm-moved', `${palmDisp.toFixed(3)} dry ${dry.toFixed(2)}`);
-          else if (palmDisp < 0.06 && dopen > 0.06 && this._palmMoveSlow >= 0.03)
+          else if (palmDisp < 0.06 && dopen > 0.06 && this._palmMoveSlow >= 0.025)
             this._note('flick↓ ✗palm-settling', this._palmMoveSlow.toFixed(3));
           else this._note('flick↓ ✗no-extension', `Δo ${dopen.toFixed(2)}`);
         }
