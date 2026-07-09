@@ -56,6 +56,7 @@ export class Gestures extends EventTarget {
     this.clenchEnabled = false;      // chapter/lightbox: the fist takes/holds
     this.unclenchEnabled = false;    // lightbox: the open palm releases
     this._noteAt = {};               // near-miss journal, throttled per tag
+    this._palmTrail = [];            // 0.7s of palm positions — "has it STOOD"
 
     this._relSamples = [];        // fingertip minus palm — the lazy-finger signal
     this._relDisp = 0;
@@ -306,18 +307,18 @@ export class Gestures extends EventTarget {
     // "history". The palm is what must stand still, so the palm is measured.
     const palmMove = this._rel130
       ? Math.hypot(h.palm.x - this._rel130.px, h.palm.y - this._rel130.py) : 1;
-    // ...and its slow shadow: "the palm stands" must mean it has BEEN
-    // standing (~0.4s), not that it stopped a moment ago — the tail of a
-    // palm sweep parks the palm first while the finger settles down and
-    // unfurls, which photographs exactly like a polite snap (field log
-    // 02:29: a false step-back rode the tail of almost every down-sweep)
-    // fed only with REAL measurements: the 130ms window's "1" sentinel is a
-    // guard value, not motion — letting it seed the EMA blinded the polite
-    // snap for the first ~1.5s of every hand session
-    if (this._rel130) {
-      this._palmMoveSlow = (this._palmMoveSlow ?? 0) +
-        (palmMove - (this._palmMoveSlow ?? 0)) * 0.12;
-    }
+    // ...and its long memory: "the palm stands" must mean it has BEEN
+    // standing, not that it stopped a moment ago. The tail of a palm sweep
+    // parks the palm first while the finger settles and unfurls — a polite
+    // snap's photograph — and a GENTLE sweep (his returns ride at vy
+    // 700–1200) moves the palm too smoothly for any speed-EMA to notice
+    // (field logs 02:29→02:55, three generations of this one leak). So the
+    // gate is displacement over 0.7s: where was the palm, not how fast.
+    this._palmTrail.push({ x: h.palm.x, y: h.palm.y, t: now });
+    while (this._palmTrail.length && now - this._palmTrail[0].t > 700) this._palmTrail.shift();
+    const pt0 = this._palmTrail[0];
+    const palmDrift = pt0 && now - pt0.t > 400
+      ? Math.hypot(h.palm.x - pt0.x, h.palm.y - pt0.y) : 1;
     // a real clench assembles from the WHOLE open palm at once; a hand
     // relaxing after a swipe curls finger by finger, and the last fold
     // used to complete the "fist" and open a photo (field log: clench
@@ -514,7 +515,7 @@ export class Gestures extends EventTarget {
         // fingertips fly UP relative to the palm).
         const palmDisp = Math.hypot(rN.px - r0.px, rN.py - r0.py);
         if (strokeY && r0.o > 0.4 && (
-            (palmDisp < 0.06 && dopen > 0.06 && this._palmMoveSlow < 0.025) ||
+            (palmDisp < 0.06 && dopen > 0.06 && palmDrift < 0.09) ||
             (palmDisp < dry * 0.45 && dopen > 1.1))) {
           axis = 'y'; dir = 'down';
           vel = (dry * window.innerHeight * this.gain) / rdt;
@@ -529,8 +530,8 @@ export class Gestures extends EventTarget {
           if (r0.o <= 0.4) this._note('flick↓ ✗from-fist', `o ${r0.o.toFixed(2)}`);
           else if (palmDisp >= 0.06 && dopen <= 1.1) this._note('flick↓ ✗palm-led', `pd ${palmDisp.toFixed(2)} Δo ${dopen.toFixed(2)}`);
           else if (palmDisp >= dry * 0.45) this._note('flick↓ ✗palm-moved', `${palmDisp.toFixed(3)} dry ${dry.toFixed(2)}`);
-          else if (palmDisp < 0.06 && dopen > 0.06 && this._palmMoveSlow >= 0.025)
-            this._note('flick↓ ✗palm-settling', this._palmMoveSlow.toFixed(3));
+          else if (palmDisp < 0.06 && dopen > 0.06 && palmDrift >= 0.09)
+            this._note('flick↓ ✗palm-drift', palmDrift.toFixed(3));
           else this._note('flick↓ ✗no-extension', `Δo ${dopen.toFixed(2)}`);
         }
         if (axis) {
@@ -701,6 +702,7 @@ export class Gestures extends EventTarget {
     this._samples.length = 0;
     this._relSamples.length = 0;
     this._relDisp = 0;
+    this._palmTrail.length = 0;
     this._emit('leave', {});
   }
 
