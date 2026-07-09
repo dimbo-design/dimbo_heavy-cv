@@ -353,7 +353,9 @@ export class Gestures extends EventTarget {
         const type = this._fistIn >= 2 ? 'clench' : 'unclench';
         this._fistIn = 0; this._fistOut = 0;
         this._fistActAt = now;
-        this._fistCooldownUntil = now + 900;
+        // the release leaves an open, settled hand — the next take may come
+        // sooner (his slider rhythm hit the 900 with 4–136ms to spare)
+        this._fistCooldownUntil = now + (type === 'clench' ? 900 : 700);
         this._swipeCooldownUntil = Math.max(this._swipeCooldownUntil, now + 600);
         this._openSlow = h.open;
         // the diagnostics ride the journal line — the scroll-read-as-fist
@@ -447,9 +449,10 @@ export class Gestures extends EventTarget {
     // A fist opening into a palm is ALSO a fingertip flying out with the hand
     // opening — field log: it read as "flick up" and its cooldown silenced
     // unclench entirely (the photo never let go). Hence the extra gates: a
-    // flick may not START from a fist (r0.o), may not open explosively wide
-    // (that's an unclench), and stays quiet while a second hand is in frame
-    // (zooming hands sweep — they must not flip photos).
+    // flick may not START from a true fist (r0.o), and stays quiet while a
+    // second hand is in frame (zooming hands sweep — they must not flip
+    // photos). Down-flicks need no explosion cap: a fist opens its
+    // fingertips UPWARD relative to the palm, the wrong sign entirely.
     if (!this.grabbing && this._relSamples.length > 3) {
       const r0 = this._relSamples[0];
       const rN = this._relSamples[this._relSamples.length - 1];
@@ -473,11 +476,20 @@ export class Gestures extends EventTarget {
         // motion is a hand coming home and is not even a detection. The other
         // direction lives in a DIFFERENT family (Dmitry's split): palm swipe
         // up reads on, finger snap down steps back — each family is blind to
-        // the other's parasitic motions. Hence the palm-stillness gate here,
-        // his own definition verbatim: the finger works, the palm stands.
+        // the other's parasitic motions.
+        // And the snap is itself a FAMILY, not the one polite template it was
+        // recorded from (his traces 01:00): the natural whip STARTS from a
+        // half-curled hand (o 0.45–0.75), EXPLODES open (Δo up to +2.2 — the
+        // metric reads the whole finger unfurling), and carries the palm
+        // 0.1–0.2 along. What separates it from a hand-drop is DOMINANCE:
+        // the fingertip travels ~4× the palm. The old absolute stillness
+        // (0.06) described only the polite variant. Direction already
+        // excludes the fist-opening parasite (its fingertips fly UP relative
+        // to the palm), so the upper Δo bound — an artifact of the old
+        // bidirectional era — is gone.
         const palmDisp = Math.hypot(rN.px - r0.px, rN.py - r0.py);
-        if (strokeY && palmDisp < 0.06 &&
-            r0.o > 0.6 && dopen > 0.06 && dopen < 0.6) {
+        if (strokeY && palmDisp < Math.max(0.06, dry * 0.5) &&
+            r0.o > 0.4 && dopen > 0.06) {
           axis = 'y'; dir = 'down';
           vel = (dry * window.innerHeight * this.gain) / rdt;
         } else if (this.flickXEnabled &&
@@ -488,10 +500,9 @@ export class Gestures extends EventTarget {
         }
         if (!axis && strokeY) {
           // a real stroke, one gate said no — name the gate in the journal
-          if (palmDisp >= 0.06) this._note('flick↓ ✗palm-moved', palmDisp.toFixed(3));
-          else if (r0.o <= 0.6) this._note('flick↓ ✗from-curled', `o ${r0.o.toFixed(2)}`);
-          else if (dopen <= 0.06) this._note('flick↓ ✗no-extension', `Δo ${dopen.toFixed(2)}`);
-          else this._note('flick↓ ✗explosive-open', `Δo ${dopen.toFixed(2)}`);
+          if (palmDisp >= Math.max(0.06, dry * 0.5)) this._note('flick↓ ✗palm-moved', `${palmDisp.toFixed(3)} dry ${dry.toFixed(2)}`);
+          else if (r0.o <= 0.4) this._note('flick↓ ✗from-fist', `o ${r0.o.toFixed(2)}`);
+          else this._note('flick↓ ✗no-extension', `Δo ${dopen.toFixed(2)}`);
         }
         if (axis) {
           const m = this._mom[axis];
@@ -504,6 +515,11 @@ export class Gestures extends EventTarget {
             this._relSamples.length = 0;
             this._samples.length = 0;        // the same stroke is not also a palm swipe
             this._flickHoldUntil = now + 340; // same direction may repeat quickly
+            // the finger's trip home is a rising, half-open hand — exactly a
+            // palm-up's silhouette now that sweep purity is peak-based. The
+            // families stay blind to each other's returns the honest way: we
+            // KNOW a snap just happened, so "up" is deaf for its home corridor
+            if (axis === 'y') this._swipeUpMuteUntil = now + 1500;
             // reading direction only exists where two directions do (galleries)
             if (axis === 'x') this._mom.x = { dir, vel, until: now + 2600 };
             this._swipeCooldownUntil = Math.max(this._swipeCooldownUntil, now + 800);
@@ -548,24 +564,41 @@ export class Gestures extends EventTarget {
           this._emit('swipe', { axis: 'x', dir: sdir, vx: v.vx, pure });
         }
       } else if (Math.abs(dy) > window.innerHeight * 0.18 &&
-          Math.abs(dy) > Math.abs(dx) * 1.6 && Math.abs(v.vy) > 1250) {
+          Math.abs(dy) > Math.abs(dx) * 1.6 && Math.abs(v.vy) > 600) {
         // the palm family holds two directions and Dmitry reads BOTH ways —
         // so the return-guard window is short and soft: right after an
         // up-stroke a downward drift is the palm coming home; past ~2.2s a
         // down-stroke is a deliberate step back and rides free
         const sdirY = dy > 0 ? 'down' : 'up';
         const pm = this._palmMom;
-        // purity is directional: the closing brush (down, lightbox) keeps
-        // the ceremonial spread — a failed pinch drifting away must never
-        // close a photo. Pushing the sheet UP carries no such risk, and the
-        // field showed honest reading-swipes done with a working palm, not
-        // a spread one (✗not-pure up over and over) — 0.9 lets them speak.
+        // purity is directional. For UP, per-frame openness is a LIE inside
+        // a fast stroke: motion smear "collapses" the fingers for a frame or
+        // two (the same artifact the fist guards against) — his sweeps read
+        // o 2.2 → 0.8 → 1.2 within one honest push, and any per-sample o
+        // gate starves them. What an open-hand stroke can actually prove:
+        // its PEAK openness (an honest palm shows o>1.15 somewhere in the
+        // window; a failed-pinch drift or a lazy half-curl never does), and
+        // the absence of a pinch in every frame (a spread hand pointing
+        // down reads p 0.4–0.6 by geometry; a real pinch holds p<0.3).
+        // The closing brush (down, lightbox) keeps the full ceremony.
         const oMin = Math.min(...this._samples.map((s) => s.o));
-        const pureY = this._samples.every((s) => s.o > (sdirY === 'up' ? 0.9 : 1.05) && s.p > 0.45);
-        if (!pureY) {
+        const oMax = Math.max(...this._samples.map((s) => s.o));
+        const pureY = sdirY === 'up'
+          ? oMax > 1.1 && this._samples.every((s) => s.p > 0.3)
+          : this._samples.every((s) => s.o > 1.05 && s.p > 0.45);
+        // the speed floor is directional too: down CLOSES (a photo) and
+        // demands decisiveness; up only reads on, and his graceful sweep
+        // peaked at ~1100 — killed by the flat 1250 floor
+        const vyFloor = sdirY === 'up' ? 900 : 1250;
+        if (sdirY === 'up' && now < (this._swipeUpMuteUntil || 0)) {
+          this._samples.length = 0;   // the finger coming home, not a call
+          this._note('swipe ↩finger-home', `${Math.round(this._swipeUpMuteUntil - now)}ms`);
+        } else if (Math.abs(v.vy) < vyFloor) {
+          this._note('swipe ✗slow', `${sdirY} vy ${Math.round(Math.abs(v.vy))}`);
+        } else if (!pureY) {
           // a big y-stroke with fingers not honestly open — the most common
           // shape of a palm swipe that "didn't work" in the field
-          this._note('swipe ✗not-pure', `${sdirY} o ${oMin.toFixed(2)}`);
+          this._note('swipe ✗not-pure', `${sdirY} o ${oMin.toFixed(2)}..${oMax.toFixed(2)}`);
         } else if (sdirY === 'down' && pm && now < pm.until &&
             Math.abs(v.vy) < Math.max(1700, pm.vel * 1.45)) {
           this._samples.length = 0;          // the palm coming home, not a call
