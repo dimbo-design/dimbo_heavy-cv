@@ -258,10 +258,15 @@ export class Gestures extends EventTarget {
 
     // ---- cursor: a stable anatomical point. Switching between fingertip
     // and palm centre made the cursor hop whenever 'pointing' flickered —
-    // a fixed blend keeps one continuous point regardless of hand shape
+    // so the blend WEIGHT glides instead (no hop, a lean): a relaxed hand
+    // reads half-and-half, but a pointing hand aims with its fingertip.
+    // Field log 02:01: with a fixed 0.55 blend the palm outvoted the finger
+    // — the node nearest the HAND got picked, not the one pointed at.
+    const wT = !this.grabbing && h.pointing ? 0.85 : 0.55;
+    this._idxW = (this._idxW ?? 0.55) + (wT - (this._idxW ?? 0.55)) * 0.12;
     const src = this.grabbing ? h.pinchPoint : {
-      x: h.index.x * 0.55 + h.palm.x * 0.45,
-      y: h.index.y * 0.55 + h.palm.y * 0.45,
+      x: h.index.x * this._idxW + h.palm.x * (1 - this._idxW),
+      y: h.index.y * this._idxW + h.palm.y * (1 - this._idxW),
     };
     const vw = window.innerWidth, vh = window.innerHeight;
     const x = ((1 - src.x) - 0.5) * this.gain * vw + vw / 2;
@@ -477,19 +482,22 @@ export class Gestures extends EventTarget {
         // direction lives in a DIFFERENT family (Dmitry's split): palm swipe
         // up reads on, finger snap down steps back — each family is blind to
         // the other's parasitic motions.
-        // And the snap is itself a FAMILY, not the one polite template it was
-        // recorded from (his traces 01:00): the natural whip STARTS from a
-        // half-curled hand (o 0.45–0.75), EXPLODES open (Δo up to +2.2 — the
-        // metric reads the whole finger unfurling), and carries the palm
-        // 0.1–0.2 along. What separates it from a hand-drop is DOMINANCE:
-        // the fingertip travels ~4× the palm. The old absolute stillness
-        // (0.06) described only the polite variant. Direction already
-        // excludes the fist-opening parasite (its fingertips fly UP relative
-        // to the palm), so the upper Δo bound — an artifact of the old
-        // bidirectional era — is gone.
+        // And the snap is itself a FAMILY of exactly TWO templates (the
+        // in-between turned out to be everyone else's strokes — field log
+        // 02:05: a palm-led down-sweep with the fingers leading passed a
+        // blanket relative gate and rained step-backs over his reading):
+        //   polite — the finger works, the palm stands (his first traces);
+        //   whip   — from a half-curl the whole finger unfurls (Δo +1.4…2.2
+        //            recorded, nothing else explodes open like that) and the
+        //            palm may ride along, but the fingertip still travels
+        //            ~2× the palm. The EXPLOSION is the whip's signature —
+        //            a palm sweep opens by +0.3 at best.
+        // Direction already excludes the fist-opening parasite (its
+        // fingertips fly UP relative to the palm).
         const palmDisp = Math.hypot(rN.px - r0.px, rN.py - r0.py);
-        if (strokeY && palmDisp < Math.max(0.06, dry * 0.5) &&
-            r0.o > 0.4 && dopen > 0.06) {
+        if (strokeY && r0.o > 0.4 && (
+            (palmDisp < 0.06 && dopen > 0.06) ||
+            (palmDisp < dry * 0.45 && dopen > 0.5))) {
           axis = 'y'; dir = 'down';
           vel = (dry * window.innerHeight * this.gain) / rdt;
         } else if (this.flickXEnabled &&
@@ -500,8 +508,9 @@ export class Gestures extends EventTarget {
         }
         if (!axis && strokeY) {
           // a real stroke, one gate said no — name the gate in the journal
-          if (palmDisp >= Math.max(0.06, dry * 0.5)) this._note('flick↓ ✗palm-moved', `${palmDisp.toFixed(3)} dry ${dry.toFixed(2)}`);
-          else if (r0.o <= 0.4) this._note('flick↓ ✗from-fist', `o ${r0.o.toFixed(2)}`);
+          if (r0.o <= 0.4) this._note('flick↓ ✗from-fist', `o ${r0.o.toFixed(2)}`);
+          else if (palmDisp >= 0.06 && dopen <= 0.5) this._note('flick↓ ✗palm-led', `pd ${palmDisp.toFixed(2)} Δo ${dopen.toFixed(2)}`);
+          else if (palmDisp >= dry * 0.45) this._note('flick↓ ✗palm-moved', `${palmDisp.toFixed(3)} dry ${dry.toFixed(2)}`);
           else this._note('flick↓ ✗no-extension', `Δo ${dopen.toFixed(2)}`);
         }
         if (axis) {

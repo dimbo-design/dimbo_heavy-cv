@@ -335,7 +335,11 @@ function boot() {
     app.signFrames = sgn && fam(sgn) === fam(app.signLast) ? app.signFrames + 1 : (sgn ? 1 : 0);
     app.signLast = sgn;
     const nowS = performance.now();
-    if (sgn && app.signFrames >= 6 && nowS > app.signCooldownUntil &&
+    // peace needs a longer stand than the fack: a pointing hand is one
+    // flicker of the middle finger away from a V (field: PEACE fired
+    // during plain navigation), while nobody points with the middle finger
+    const needFrames = fam(sgn) === 'peace' ? 10 : 6;
+    if (sgn && app.signFrames >= needFrames && nowS > app.signCooldownUntil &&
         app.state === 'present' && !app.spaceId && !app.lb) {
       app.signCooldownUntil = nowS + 16000;
       app.glyphUntil = nowS + 3400;
