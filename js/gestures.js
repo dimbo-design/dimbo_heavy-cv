@@ -196,6 +196,12 @@ export class Gestures extends EventTarget {
         break;
       }
     }
+    // each sample remembers how fast the fingertip was AT ITS moment — the
+    // stroke's signatures are phase-shifted (the burst comes first, the
+    // unfurl finishes ~100ms later; his trace 03:49 proved an instantaneous
+    // liveness gate can never be true at the same frame as the openness
+    // gate), so liveness is asked of the WHOLE window: was there a burst
+    this._relSamples[this._relSamples.length - 1].rd = this._relDisp;
 
     // ---- grab: recognized as the ACT of pinching. A slow-moving baseline
     // remembers how far apart the fingers usually are; engaging requires the
@@ -526,7 +532,9 @@ export class Gestures extends EventTarget {
         // but a reach FOLDS (Δo noise −0.2…+0.05) while a snap UNFURLS
         // (+0.25 recorded minimum; instantaneous pinch can't separate them —
         // his canonical snap fires at pinch 0.24, right where a reach lives)
-        if (strokeY && r0.o > 0.4 && this._relDisp > 0.13 && (
+        const burst = Math.max(this._relDisp,
+          ...this._relSamples.map((s) => s.rd || 0));
+        if (strokeY && r0.o > 0.4 && burst > 0.15 && (
             (palmDisp < 0.06 && dopen > 0.14 && palmDrift < 0.09) ||
             (palmDisp < dry * 0.45 && dopen > 1.1))) {
           axis = 'y'; dir = 'down';
@@ -540,7 +548,7 @@ export class Gestures extends EventTarget {
         if (!axis && strokeY) {
           // a real stroke, one gate said no — name the gate in the journal
           if (r0.o <= 0.4) this._note('flick↓ ✗from-fist', `o ${r0.o.toFixed(2)}`);
-          else if (this._relDisp <= 0.13) this._note('flick↓ ✗limp', `rel ${this._relDisp.toFixed(2)}`);
+          else if (burst <= 0.15) this._note('flick↓ ✗limp', `burst ${burst.toFixed(2)}`);
           else if (palmDisp >= 0.06 && dopen <= 1.1) this._note('flick↓ ✗palm-led', `pd ${palmDisp.toFixed(2)} Δo ${dopen.toFixed(2)}`);
           else if (palmDisp >= dry * 0.45) this._note('flick↓ ✗palm-moved', `${palmDisp.toFixed(3)} dry ${dry.toFixed(2)}`);
           else if (palmDisp < 0.06 && dopen > 0.14 && palmDrift >= 0.09)
