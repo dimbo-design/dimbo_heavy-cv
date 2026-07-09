@@ -306,6 +306,13 @@ export class Gestures extends EventTarget {
     // "history". The palm is what must stand still, so the palm is measured.
     const palmMove = this._rel130
       ? Math.hypot(h.palm.x - this._rel130.px, h.palm.y - this._rel130.py) : 1;
+    // ...and its slow shadow: "the palm stands" must mean it has BEEN
+    // standing (~0.4s), not that it stopped a moment ago — the tail of a
+    // palm sweep parks the palm first while the finger settles down and
+    // unfurls, which photographs exactly like a polite snap (field log
+    // 02:29: a false step-back rode the tail of almost every down-sweep)
+    this._palmMoveSlow = (this._palmMoveSlow ?? palmMove) +
+      (palmMove - (this._palmMoveSlow ?? palmMove)) * 0.25;
     // a real clench assembles from the WHOLE open palm at once; a hand
     // relaxing after a swipe curls finger by finger, and the last fold
     // used to complete the "fist" and open a photo (field log: clench
@@ -500,7 +507,7 @@ export class Gestures extends EventTarget {
         // fingertips fly UP relative to the palm).
         const palmDisp = Math.hypot(rN.px - r0.px, rN.py - r0.py);
         if (strokeY && r0.o > 0.4 && (
-            (palmDisp < 0.06 && dopen > 0.06) ||
+            (palmDisp < 0.06 && dopen > 0.06 && this._palmMoveSlow < 0.03) ||
             (palmDisp < dry * 0.45 && dopen > 0.5))) {
           axis = 'y'; dir = 'down';
           vel = (dry * window.innerHeight * this.gain) / rdt;
@@ -515,6 +522,8 @@ export class Gestures extends EventTarget {
           if (r0.o <= 0.4) this._note('flick↓ ✗from-fist', `o ${r0.o.toFixed(2)}`);
           else if (palmDisp >= 0.06 && dopen <= 0.5) this._note('flick↓ ✗palm-led', `pd ${palmDisp.toFixed(2)} Δo ${dopen.toFixed(2)}`);
           else if (palmDisp >= dry * 0.45) this._note('flick↓ ✗palm-moved', `${palmDisp.toFixed(3)} dry ${dry.toFixed(2)}`);
+          else if (palmDisp < 0.06 && dopen > 0.06 && this._palmMoveSlow >= 0.03)
+            this._note('flick↓ ✗palm-settling', this._palmMoveSlow.toFixed(3));
           else this._note('flick↓ ✗no-extension', `Δo ${dopen.toFixed(2)}`);
         }
         if (axis) {
@@ -584,6 +593,12 @@ export class Gestures extends EventTarget {
         // down-stroke is a deliberate step back and rides free
         const sdirY = dy > 0 ? 'down' : 'up';
         const pm = this._palmMom;
+        // every observed DOWN stroke — emitted, dead, slow or impure — arms
+        // the home-guard for "up": the hand that just travelled down comes
+        // back up, and with peak-based purity that return photographs as an
+        // honest reading-push (field log 02:29: "откуда мах вверх?" — from
+        // the returns). Same escape as every home-guard: decisively harder.
+        if (sdirY === 'down') this._palmMomDown = { vel: Math.abs(v.vy), until: now + 1400 };
         // purity is directional. For UP, per-frame openness is a LIE inside
         // a fast stroke: motion smear "collapses" the fingers for a frame or
         // two (the same artifact the fist guards against) — his sweeps read
@@ -616,6 +631,10 @@ export class Gestures extends EventTarget {
             Math.abs(v.vy) < Math.max(1700, pm.vel * 1.45)) {
           this._samples.length = 0;          // the palm coming home, not a call
           this._note('swipe ↩home', '');
+        } else if (sdirY === 'up' && this._palmMomDown && now < this._palmMomDown.until &&
+            Math.abs(v.vy) < Math.max(1700, this._palmMomDown.vel * 1.45)) {
+          this._samples.length = 0;          // the hand riding back up, not a call
+          this._note('swipe ↩home-up', '');
         } else if (sdirY === 'down' ? !this.swipeDownEnabled : !this.swipeUpEnabled) {
           // the palm's word means nothing on this screen — dead means
           // undetected: no event, and none of the swipe/flick silence that
