@@ -325,9 +325,24 @@ function boot() {
     // is born — the real fack on the other hand must win. Two facks get
     // their own answer: the mirror takes offence.
     const signs = e.detail.hands.map((hh) => hh?.sign).filter(Boolean);
+    // the two-hand heart (his request, the macOS gesture): index tips kiss
+    // at the top, thumbs meet below, and the palms stand APART — a phantom
+    // hand rides on its host and can never hold a heart open. Accidental
+    // hands don't fold into this; the strictness costs nothing.
+    const [ha, hb] = e.detail.hands;
+    const heart = !!(ha && hb && ha.thumb && hb.thumb &&
+      ha.size > 0.09 && hb.size > 0.09) && (() => {
+      const di = Math.hypot(ha.index.x - hb.index.x, ha.index.y - hb.index.y);
+      const dt = Math.hypot(ha.thumb.x - hb.thumb.x, ha.thumb.y - hb.thumb.y);
+      const dp = Math.hypot(ha.palm.x - hb.palm.x, ha.palm.y - hb.palm.y);
+      const rise = (ha.thumb.y + hb.thumb.y) / 2 - (ha.index.y + hb.index.y) / 2;
+      return di < 0.09 && dt < 0.13 && rise > 0.04 && dp > 0.06 && dp < 0.5;
+    })();
     let sgn = null;
     if (signs.includes('fack')) {
       sgn = signs.filter((s) => s === 'fack').length >= 2 ? 'fack2' : 'fack';
+    } else if (heart) {
+      sgn = 'heart';
     } else if (signs.includes('peace')) {
       sgn = 'peace';
     }
@@ -338,7 +353,7 @@ function boot() {
     // peace needs a longer stand than the fack: a pointing hand is one
     // flicker of the middle finger away from a V (field: PEACE fired
     // during plain navigation), while nobody points with the middle finger
-    const needFrames = fam(sgn) === 'peace' ? 10 : 6;
+    const needFrames = fam(sgn) === 'peace' ? 10 : fam(sgn) === 'heart' ? 8 : 6;
     if (sgn && app.signFrames >= needFrames && nowS > app.signCooldownUntil &&
         app.state === 'present' && !app.spaceId && !app.lb) {
       app.signCooldownUntil = nowS + 16000;
@@ -352,7 +367,8 @@ function boot() {
       field.setTargets({ coherence: 0.18 });
       setTimeout(() => {
         field.showGlyph(
-          sgn === 'fack2' ? 'WOW\nRUDE' : sgn === 'fack' ? 'F@CK\nYOU' : 'PEACE');
+          sgn === 'fack2' ? 'WOW\nRUDE' : sgn === 'fack' ? 'F@CK\nYOU'
+            : sgn === 'heart' ? '♥' : 'PEACE');
         field.pulse(0.05);                // a whisper-strength stylistic twist
         if (app.state === 'present') {
           field.setTargets({ coherence: CONFIG.coherence.present });
@@ -1635,6 +1651,7 @@ function renderStatic() {
   setText('invite-h', returning ? UI.invite.hReturn[lang] : UI.invite.h[lang]);
   setText('invite-action-t', UI.invite.a[lang]);
   setText('invite-s', UI.invite.s[lang]);
+  setText('invite-s2', UI.invite.s2[lang]);
 
   setText('denied-h', UI.denied.h[lang]);
   setText('denied-s', UI.denied.s[lang]);

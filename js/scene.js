@@ -355,7 +355,9 @@ export class Field {
     g.textAlign = 'center';
     g.textBaseline = 'middle';
     const lines = text.split('\n');
-    const fs = Math.min(46, Math.floor((W * 1.62) / Math.max(...lines.map((l) => l.length))));
+    // a single symbol (the heart) fills the plane like a sign, not a word
+    const fs = Math.min(text.length === 1 ? 104 : 46,
+      Math.floor((W * 1.62) / Math.max(...lines.map((l) => l.length))));
     g.font = `900 ${fs}px "Fixel Display", system-ui, sans-serif`;
     lines.forEach((l, i) =>
       g.fillText(l, W / 2, H / 2 + (i - (lines.length - 1) / 2) * fs * 1.14));

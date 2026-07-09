@@ -115,6 +115,7 @@ function summarize(lm) {
   return {
     palm: { x: palm.x, y: palm.y },
     index: { x: lm[8].x, y: lm[8].y },
+    thumb: { x: lm[4].x, y: lm[4].y },   // the two-hand heart reads on it
     pinchPoint: { x: (lm[4].x + lm[8].x) / 2, y: (lm[4].y + lm[8].y) / 2 },
     size, pinch, open, sign,
     pointing: idxExt > 1.15 && midExt < 1.0,

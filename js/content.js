@@ -280,6 +280,10 @@ export const UI = {
     hReturn: { ru: 'С возвращением',
                en: 'Welcome back' },
     a:  { ru: 'позволить ему видеть', en: 'let it see' },
+    // the second line sets the frame BEFORE the mirror (his pick over the
+    // in-scene primer): the feature is gesture control, not the reflection
+    s2: { ru: 'дальше мышь не понадобится: листать, брать и открывать здесь можно руками',
+          en: 'you won’t need the mouse after this — scroll, grab and open with your hands' },
     s:  { ru: 'камера работает локально — изображение не покидает ваш компьютер',
           en: 'the camera runs locally — nothing ever leaves your machine' },
   },

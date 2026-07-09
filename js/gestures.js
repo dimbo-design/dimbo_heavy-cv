@@ -514,7 +514,13 @@ export class Gestures extends EventTarget {
         // Direction already excludes the fist-opening parasite (its
         // fingertips fly UP relative to the palm).
         const palmDisp = Math.hypot(rN.px - r0.px, rN.py - r0.py);
-        if (strokeY && r0.o > 0.4 && (
+        // ...and both templates demand the stroke be ALIVE right now: a
+        // relaxed hand lowering slowly accumulates the same dry over the
+        // window (0.2–0.44 recorded) and its openness flaps hard enough to
+        // fake even the whip's unfurl (Δo swings to 1.26 on a drooping,
+        // foreshortened hand — field log 03:07). A real snap concentrates
+        // its travel in a burst: the 130ms rel-displacement is the tell.
+        if (strokeY && r0.o > 0.4 && this._relDisp > 0.13 && (
             (palmDisp < 0.06 && dopen > 0.06 && palmDrift < 0.09) ||
             (palmDisp < dry * 0.45 && dopen > 1.1))) {
           axis = 'y'; dir = 'down';
@@ -528,6 +534,7 @@ export class Gestures extends EventTarget {
         if (!axis && strokeY) {
           // a real stroke, one gate said no — name the gate in the journal
           if (r0.o <= 0.4) this._note('flick↓ ✗from-fist', `o ${r0.o.toFixed(2)}`);
+          else if (this._relDisp <= 0.13) this._note('flick↓ ✗limp', `rel ${this._relDisp.toFixed(2)}`);
           else if (palmDisp >= 0.06 && dopen <= 1.1) this._note('flick↓ ✗palm-led', `pd ${palmDisp.toFixed(2)} Δo ${dopen.toFixed(2)}`);
           else if (palmDisp >= dry * 0.45) this._note('flick↓ ✗palm-moved', `${palmDisp.toFixed(3)} dry ${dry.toFixed(2)}`);
           else if (palmDisp < 0.06 && dopen > 0.06 && palmDrift >= 0.09)
