@@ -338,6 +338,9 @@ function boot() {
       const rise = (ha.thumb.y + hb.thumb.y) / 2 - (ha.index.y + hb.index.y) / 2;
       return di < 0.09 && dt < 0.13 && rise > 0.04 && dp > 0.06 && dp < 0.5;
     })();
+    // two hands, two different signs → the winner speaks (owner's
+    // hierarchy: the fack outranks everything, then the heart, the V,
+    // and the like concedes to all)
     let sgn = null;
     if (signs.includes('fack')) {
       sgn = signs.filter((s) => s === 'fack').length >= 2 ? 'fack2' : 'fack';
@@ -345,6 +348,8 @@ function boot() {
       sgn = 'heart';
     } else if (signs.includes('peace')) {
       sgn = 'peace';
+    } else if (signs.includes('like')) {
+      sgn = 'like';
     }
     const fam = (s) => (s && s.startsWith('fack') ? 'fack' : s);
     app.signFrames = sgn && fam(sgn) === fam(app.signLast) ? app.signFrames + 1 : (sgn ? 1 : 0);
@@ -353,7 +358,8 @@ function boot() {
     // peace needs a longer stand than the fack: a pointing hand is one
     // flicker of the middle finger away from a V (field: PEACE fired
     // during plain navigation), while nobody points with the middle finger
-    const needFrames = fam(sgn) === 'peace' ? 10 : fam(sgn) === 'heart' ? 8 : 6;
+    const needFrames = fam(sgn) === 'peace' ? 10
+      : fam(sgn) === 'heart' || fam(sgn) === 'like' ? 8 : 6;
     if (sgn && app.signFrames >= needFrames && nowS > app.signCooldownUntil &&
         app.state === 'present' && !app.spaceId && !app.lb) {
       app.signCooldownUntil = nowS + 16000;
@@ -368,7 +374,7 @@ function boot() {
       setTimeout(() => {
         field.showGlyph(
           sgn === 'fack2' ? 'WOW\nRUDE' : sgn === 'fack' ? 'F@CK\nYOU'
-            : sgn === 'heart' ? '♥' : 'PEACE');
+            : sgn === 'heart' ? '♥' : sgn === 'like' ? '👍' : 'PEACE');
         field.pulse(0.05);                // a whisper-strength stylistic twist
         if (app.state === 'present') {
           field.setTargets({ coherence: CONFIG.coherence.present });

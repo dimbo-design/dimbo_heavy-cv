@@ -110,6 +110,14 @@ a:hover { border-bottom-color: var(--ink-dim); }
   color: var(--ink-dim); max-width: 52ch; line-height: 1.8;
 }
 
+/* the hands annotation on the invite: second-level, outside the narrative —
+   a hairline sets it apart (the one divider this design speaks) */
+#invite-s2 {
+  margin-top: 6px; padding-top: 16px;
+  border-top: 1px solid var(--line);
+  color: var(--ink-faint); max-width: 46ch;
+}
+
 .mini-links { display: flex; gap: 28px; font-family: var(--mono); font-size: 13px; }
 .mini-links a { color: var(--ink-dim); padding-bottom: 2px; }
 .mini-links a:hover { color: var(--ink); }

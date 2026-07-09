@@ -620,28 +620,25 @@ export class Gestures extends EventTarget {
         // honest reading-push (field log 02:29: "откуда мах вверх?" — from
         // the returns). Same escape as every home-guard: decisively harder.
         if (sdirY === 'down') this._palmMomDown = { vel: Math.abs(v.vy), until: now + 1400 };
-        // purity is directional. For UP, per-frame openness is a LIE inside
-        // a fast stroke: motion smear "collapses" the fingers for a frame or
-        // two (the same artifact the fist guards against) — his sweeps read
-        // o 2.2 → 0.8 → 1.2 within one honest push, and any per-sample o
-        // gate starves them. What an open-hand stroke can actually prove:
-        // its PEAK openness (an honest palm shows o>1.15 somewhere in the
-        // window; a failed-pinch drift or a lazy half-curl never does), and
-        // the absence of a pinch in every frame (a spread hand pointing
-        // down reads p 0.4–0.6 by geometry; a real pinch holds p<0.3).
+        // purity is directional — and UP is deliberately CHEAP. Its real
+        // parasites are covered by KNOWLEDGE, not shape: the finger's trip
+        // home is muted because the snap announced itself (↩finger-home),
+        // the sweep's return because the down-stroke armed the guard
+        // (↩home-up), the pinch-release by its own 650ms silence. So the
+        // reading-push demands only "not a pinch" — the owner reads with a
+        // relaxed half-open hand (field 15:01: honest pushes peaked at
+        // o 0.73–1.03 and died on a 1.1 ceremony bar). One smeared
+        // pinch-frame is forgiven (tracking flutters inside honest sweeps).
         // The closing brush (down, lightbox) keeps the full ceremony.
         const oMin = Math.min(...this._samples.map((s) => s.o));
         const oMax = Math.max(...this._samples.map((s) => s.o));
-        // ...and one smeared pinch-frame is forgiven: tracking flutters a
-        // single frame below 0.3 inside honest sweeps (field log 03:33:
-        // real reading-pushes died as ✗not-pure with healthy o ranges)
         const pureY = sdirY === 'up'
-          ? oMax > 1.1 && this._samples.filter((s) => s.p <= 0.3).length <= 1
+          ? this._samples.filter((s) => s.p <= 0.3).length <= 1
           : this._samples.every((s) => s.o > 1.05 && s.p > 0.45);
         // the speed floor is directional too: down CLOSES (a photo) and
-        // demands decisiveness; up only reads on, and his graceful sweep
-        // peaked at ~1100 — killed by the flat 1250 floor
-        const vyFloor = sdirY === 'up' ? 900 : 1250;
+        // demands decisiveness; up only reads on — recoverable in one snap —
+        // and his relaxed pushes ride at 700–900 (field 15:01)
+        const vyFloor = sdirY === 'up' ? 700 : 1250;
         if (sdirY === 'up' && now < (this._swipeUpMuteUntil || 0)) {
           this._samples.length = 0;   // the finger coming home, not a call
           this._note('swipe ↩finger-home', `${Math.round(this._swipeUpMuteUntil - now)}ms`);

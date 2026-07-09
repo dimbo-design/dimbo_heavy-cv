@@ -355,8 +355,9 @@ export class Field {
     g.textAlign = 'center';
     g.textBaseline = 'middle';
     const lines = text.split('\n');
-    // a single symbol (the heart) fills the plane like a sign, not a word
-    const fs = Math.min(text.length === 1 ? 104 : 46,
+    // a single symbol (the heart, the thumb) fills the plane like a sign,
+    // not a word — Array.from: the 👍 is a surrogate pair, .length lies
+    const fs = Math.min(Array.from(text).length === 1 ? 104 : 46,
       Math.floor((W * 1.62) / Math.max(...lines.map((l) => l.length))));
     g.font = `900 ${fs}px "Fixel Display", system-ui, sans-serif`;
     lines.forEach((l, i) =>

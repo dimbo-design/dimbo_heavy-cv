@@ -109,9 +109,13 @@ function summarize(lm) {
   // peace sits one jitter away from an honest pointing hand (index out,
   // middle flickering) — field log: PEACE fired during plain navigation.
   // So the V demands BOTH fingers clearly out, the rest clearly folded,
-  // and a real split between the two.
+  // and a real split between the two. The like is a fist with the thumb
+  // honestly out AND above the palm — a resting fist never lifts it there.
+  const thumbExt = d(lm[4], palm) / size;
   if (midExt > 1.25 && idxExt < 0.95 && ringExt < 0.95 && pinkyExt < 0.95) sign = 'fack';
   else if (idxExt > 1.2 && midExt > 1.2 && ringExt < 0.9 && pinkyExt < 0.9 && vSplit > 0.3) sign = 'peace';
+  else if (thumbExt > 0.85 && idxExt < 0.9 && midExt < 0.9 && ringExt < 0.9 &&
+           pinkyExt < 0.9 && (palm.y - lm[4].y) / size > 0.45) sign = 'like';
   return {
     palm: { x: palm.x, y: palm.y },
     index: { x: lm[8].x, y: lm[8].y },
