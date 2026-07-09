@@ -307,24 +307,52 @@ export class Gestures extends EventTarget {
     // 1.5-2.5s after every palm swipe, thumb still out). The history
     // gate is Dmitry's description verbatim: 400ms ago the palm was
     // honestly open, and it fell all the way from there.
+    // And a fist is CLOSED: the field misfires (log 23:21 — finger-scroll
+    // attempts opening photos) were half-curls at o 0.59–0.63; every
+    // deliberate fist in the same logs sat at o ≤ 0.47. The absolute floor
+    // separates the two populations the relative gates cannot.
     const r0o = this._relSamples.length > 3 ? this._relSamples[0].o : 0;
-    const closeShape = h.open < 0.72 && this._openSlow - h.open > 0.35;
-    const openShape = h.open > 1.28 && h.open - this._openSlow > 0.35;
-    if (!this._pinched && now > this._fistCooldownUntil && palmMove < 0.05) {
+    const closeShape = h.open < 0.52 && this._openSlow - h.open > 0.35;
+    const openShape = h.open > 1.22 && h.open - this._openSlow > 0.28;
+    if (!this._pinched) {
+      // the two directions are NOT symmetric (his field verdict: "разжатие
+      // считывается хуже сжатия" — correct, and by construction). Closing
+      // GRABS — wrong is expensive, so it keeps the strict discipline:
+      // parked palm (0.05), full act cooldown, open-palm history. Opening
+      // RELEASES — wrong is cheap, and it happens mid-glide, right after
+      // the fist carried a photo: its palm gate breathes wider (0.12) and
+      // it waits only a short settle after the clench instead of the 900ms
+      // act cooldown (field: take→look→release under a second died as
+      // ✗cooldown — "нужно попытками определить нужную скорость").
+      const canClose = now > this._fistCooldownUntil && palmMove < 0.05;
+      const canOpen = now - (this._fistActAt || 0) > 350 && palmMove < 0.12;
       // the fist speaks only where main gave it a meaning (dead means
       // undetected): a clench in a chapter/lightbox, an unclench over a
       // held fist or an open photo. Elsewhere the same shapes are just a
       // hand living its life — no event, no cooldowns spent.
-      const closing = this.clenchEnabled && closeShape &&
+      const closing = canClose && this.clenchEnabled && closeShape &&
         r0o > 0.95 && r0o - h.open > 0.5;
-      const opening = (this._fistHeld || this.unclenchEnabled) && openShape;
-      if (this.clenchEnabled && closeShape && !closing)
-        this._note('fist ✗history', `r0 ${r0o.toFixed(2)} o ${h.open.toFixed(2)}`);
+      const opening = canOpen && (this._fistHeld || this.unclenchEnabled) && openShape;
+      if (this.clenchEnabled && closeShape && !closing) {
+        if (now <= this._fistCooldownUntil) this._note('fist ✗cooldown', `${Math.round(this._fistCooldownUntil - now)}ms`);
+        else if (palmMove >= 0.05) this._note('fist ✗moving-palm', palmMove.toFixed(3));
+        else this._note('fist ✗history', `r0 ${r0o.toFixed(2)} o ${h.open.toFixed(2)}`);
+      } else if (this.clenchEnabled && !closeShape && canClose &&
+          h.open < 0.72 && this._openSlow - h.open > 0.35 && r0o > 0.95) {
+        // would have fired under the old 0.72 gate — watch this tag in the
+        // field: it validates (or refutes) the 0.52 floor
+        this._note('fist ✗half-closed', `o ${h.open.toFixed(2)}`);
+      }
+      if ((this._fistHeld || this.unclenchEnabled) && openShape && !opening) {
+        if (now - (this._fistActAt || 0) <= 350) this._note('unfist ✗settling', `${Math.round(350 - (now - this._fistActAt))}ms`);
+        else this._note('unfist ✗moving-palm', palmMove.toFixed(3));
+      }
       this._fistIn = closing ? (this._fistIn || 0) + 1 : 0;
       this._fistOut = opening ? (this._fistOut || 0) + 1 : 0;
       if (this._fistIn >= 2 || this._fistOut >= 2) {
         const type = this._fistIn >= 2 ? 'clench' : 'unclench';
         this._fistIn = 0; this._fistOut = 0;
+        this._fistActAt = now;
         this._fistCooldownUntil = now + 900;
         this._swipeCooldownUntil = Math.max(this._swipeCooldownUntil, now + 600);
         this._openSlow = h.open;
@@ -345,10 +373,6 @@ export class Gestures extends EventTarget {
       }
     } else {
       this._fistIn = 0; this._fistOut = 0;
-      if (this.clenchEnabled && closeShape && !this._pinched) {
-        if (now <= this._fistCooldownUntil) this._note('fist ✗cooldown', `${Math.round(this._fistCooldownUntil - now)}ms`);
-        else this._note('fist ✗moving-palm', palmMove.toFixed(3));
-      }
     }
 
     // ---- the held fist is a clutch (Dmitry's lightbox layer): what the
@@ -361,6 +385,9 @@ export class Gestures extends EventTarget {
         if (this._fistOpenish >= 3) {
           this._fistHeld = false;
           this._fistScreen = null;
+          // visible in the journal: the system judged this a relax, not an
+          // act — if a deliberate smooth open lands here, the tag tells us
+          this._note('fist ↩relax', `o ${h.open.toFixed(2)}`);
           this._emit('fistend', {});
         }
       } else {
@@ -528,10 +555,17 @@ export class Gestures extends EventTarget {
         // down-stroke is a deliberate step back and rides free
         const sdirY = dy > 0 ? 'down' : 'up';
         const pm = this._palmMom;
-        if (!pure) {
+        // purity is directional: the closing brush (down, lightbox) keeps
+        // the ceremonial spread — a failed pinch drifting away must never
+        // close a photo. Pushing the sheet UP carries no such risk, and the
+        // field showed honest reading-swipes done with a working palm, not
+        // a spread one (✗not-pure up over and over) — 0.9 lets them speak.
+        const oMin = Math.min(...this._samples.map((s) => s.o));
+        const pureY = this._samples.every((s) => s.o > (sdirY === 'up' ? 0.9 : 1.05) && s.p > 0.45);
+        if (!pureY) {
           // a big y-stroke with fingers not honestly open — the most common
           // shape of a palm swipe that "didn't work" in the field
-          this._note('swipe ✗not-pure', sdirY);
+          this._note('swipe ✗not-pure', `${sdirY} o ${oMin.toFixed(2)}`);
         } else if (sdirY === 'down' && pm && now < pm.until &&
             Math.abs(v.vy) < Math.max(1700, pm.vel * 1.45)) {
           this._samples.length = 0;          // the palm coming home, not a call
@@ -549,7 +583,11 @@ export class Gestures extends EventTarget {
           this._note(`swipe ✗${sdirY}`, 'dead-here');
         } else {
           this._palmMom = sdirY === 'up' ? { vel: Math.abs(v.vy), until: now + 2200 } : null;
-          this._swipeCooldownUntil = now + 900;
+          // 450, not 900: same-direction repeats are safe (returns are
+          // consumed by ↩home and dead-here, never by this cooldown), and
+          // the field showed every second reading-stroke of a fast rhythm
+          // dying as ✗cooldown
+          this._swipeCooldownUntil = now + 450;
           // the hand relaxing after a palm swipe folds finger by finger and
           // completes a "fist" a second later (field: photo opened twice) —
           // the fist listens again only after the hand has truly settled

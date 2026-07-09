@@ -385,7 +385,11 @@ function boot() {
       `${e.detail.info ? ' ' + e.detail.info : ''}  [${gctx()}]`);
   });
 
-  gestures.addEventListener('enter', () => document.body.classList.add('hand-on'));
+  gestures.addEventListener('enter', () => {
+    document.body.classList.add('hand-on');
+    // the hand has spoken — the primer's work is done, this session
+    document.body.classList.add('hand-seen');
+  });
   gestures.addEventListener('leave', () => {
     document.body.classList.remove('hand-on');
     app.hold.p = 0;
@@ -1631,6 +1635,7 @@ function renderStatic() {
   setText('invite-h', returning ? UI.invite.hReturn[lang] : UI.invite.h[lang]);
   setText('invite-action-t', UI.invite.a[lang]);
   setText('invite-s', UI.invite.s[lang]);
+  setText('primer', UI.primer[lang]);
 
   setText('denied-h', UI.denied.h[lang]);
   setText('denied-s', UI.denied.s[lang]);

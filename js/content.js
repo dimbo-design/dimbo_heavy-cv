@@ -284,6 +284,14 @@ export const UI = {
           en: 'the camera runs locally — nothing ever leaves your machine' },
   },
 
+  // the primer: one quiet line while the mirror warms up, until the first
+  // raised hand. Cold tests: people never discovered the hands — either
+  // never tried, or tried once, missed, and concluded it doesn't work.
+  primer: {
+    ru: 'поднимите раскрытую ладонь — она и есть курсор',
+    en: 'raise an open palm — it is the cursor',
+  },
+
   denied: {
     h:  { ru: 'Договорились. Интерфейс останется спящим.',
           en: 'Fair enough. The interface will stay asleep.' },
