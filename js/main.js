@@ -438,7 +438,12 @@ function boot() {
 
   // capability gate: without WebGPU the depth net runs on CPU and MediaPipe
   // falls to the main thread — a slideshow that hurts more than absence.
-  // Such browsers get a considered dead-end; a quiet ghost option remains.
+  // Such browsers get the QUIET MOUSE MODE (restored 09.07 — a Cycle-C
+  // commit had flattened it into a dead-end while the README, the CSS and
+  // the render loop still promised it): the mirror sleeps, the portfolio
+  // stays fully open — nodes click, chapters read, wheel scrolls. A calm
+  // explanation floats at the centre with a "wake it here" button; models
+  // are not downloaded until that click.
   (async () => {
     let capable = false;
     try { capable = !!(navigator.gpu && await navigator.gpu.requestAdapter()); }
@@ -449,6 +454,8 @@ function boot() {
       app.state = 'asleep';
       hide('invite');
       show('asleep');
+      $('asleep').classList.add('quiet');
+      revealNodes();
     }
   })();
 
@@ -456,6 +463,7 @@ function boot() {
 
   $('asleep-action').addEventListener('click', () => {
     hide('asleep');
+    $('asleep').classList.remove('quiet');
     show('invite');
     app.state = 'boot';
     engine.initWorker();
