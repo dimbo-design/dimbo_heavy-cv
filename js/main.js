@@ -204,8 +204,6 @@ const app = {
   hold: { p: 0, target: null, until: 0 },
   ghost: null, lastGhostAt: 0, lastHandAt: 0,   // the reflection demonstrates
   mouseAt: null, mouseHover: null,              // …and answers the mouse
-  ghintOpen: {}, ghintCtx: null,                // the visitor's own toggle,
-                                                // sticky per screen, all session
   lbCooldownUntil: 0,
   scroll: { y: 0, target: 0, vel: 0, max: 0, over: 0 },
   pageX: 0, pageXVel: 0,    // chapter grabbed/thrown sideways
@@ -501,11 +499,7 @@ function boot() {
   $('space-close').addEventListener('click', () => closeSpace());
 
   $('ghint-t').addEventListener('click', () => {
-    const c = app.ghintCtx;
-    if (!c) return;
-    const cur = app.ghintOpen[c] ??
-      (c === 'present' && !localStorage.getItem('gl_open'));
-    app.ghintOpen[c] = !cur;
+    app.ghintOpen = !(app.ghintOpen ?? (app.ghintCtx === 'present'));
     syncGhint();
   });
 
@@ -908,23 +902,14 @@ function syncGhint() {
     else if (app.state === 'present') ctx = 'present';
   }
   if (!ctx) { g.classList.add('hidden'); app.ghintCtx = null; return; }
+  if (ctx !== app.ghintCtx) app.ghintOpen = null;   // each screen, its default
   app.ghintCtx = ctx;
-  // the visitor's toggle is STICKY per screen for the whole session — a
-  // lightbox trip or any other gesture must never fold what he opened
-  // (owner's hard rule). The ONLY automatic dimming lives on the fork:
-  // expanded until the hands succeed once (the same learned flag that
-  // retires the node sub-hint), collapsed ever after. Chapters simply
-  // start collapsed and then obey the visitor.
-  const open = app.ghintOpen[ctx] ??
-    (ctx === 'present' && !localStorage.getItem('gl_open'));
+  const open = app.ghintOpen ?? (ctx === 'present');
   g.classList.remove('hidden');
   g.classList.toggle('left', ctx === 'right');
   g.classList.toggle('open', open);
   $('ghint-t').textContent = `${UI.ghint.t[lang]} ${open ? '\u2212' : '+'}`;
-  $('ghint-l').innerHTML = UI.ghint[ctx][lang].map((grp) =>
-    (grp.h ? `<li class="gh-h">${grp.h}</li>` : '') +
-    grp.items.map(([a, b]) => `<li><b>${a}</b> — ${b}</li>`).join('')
-  ).join('');
+  $('ghint-l').innerHTML = UI.ghint[ctx][lang].map((s) => `<li>${s}</li>`).join('');
 }
 
 function syncCalm() {
