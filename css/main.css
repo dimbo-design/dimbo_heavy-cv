@@ -81,7 +81,9 @@ a:hover { border-bottom-color: var(--ink-dim); }
 }
 .corner.tl { top: 28px; left: 34px; }
 .corner.tr { top: 28px; right: 34px; }
-.corner.br { bottom: 26px; right: 34px; text-align: right; }
+.corner.br { bottom: 26px; right: 34px; text-align: right;
+  z-index: 30;   /* telemetry yields to the chapter sheet, same as the hint */
+}
 
 #lang button { color: var(--ink-faint); letter-spacing: 0.14em; transition: color 0.4s; padding: 4px 2px; }
 #lang button.on { color: var(--ink); }
@@ -660,7 +662,10 @@ body.is-mobile.space-open .corner.tr {
    a toggle above, a terse technical list below — readable, unlike the
    telemetry it echoes */
 #ghint {
-  position: fixed; top: 62px; right: 34px; z-index: 50;
+  /* UNDER the chapter content (z35): a strip photo sliding beneath an
+     overlaying hint read as debris — the sheet now covers both quiet
+     corners (owner's call, 09.07) */
+  position: fixed; top: 62px; right: 34px; z-index: 30;
   font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em;
   text-align: right;
   text-shadow: 0 0 8px rgba(10, 10, 13, 0.95), 0 0 18px rgba(10, 10, 13, 0.8);
