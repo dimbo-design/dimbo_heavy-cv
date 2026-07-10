@@ -62,6 +62,7 @@ export class Gestures extends EventTarget {
     this._relDisp = 0;
     this._flickHoldUntil = 0;
     this._tookPost = false;             // a newborn hand has not stood its post yet
+    this._leftAt = -1e9;                // when tracking last dropped the hand
     this._pinchBlockUntil = 0;    // no grabs while a flick's hand comes home
     // READING DIRECTION per axis (kinetic-scroll practice): in the air the
     // finger's trip home IS the opposite gesture — no glass to lift off from,
@@ -177,8 +178,12 @@ export class Gestures extends EventTarget {
       // and it may not SWIPE at all until it has stood still once — the rise
       // into the camera's field IS a reading-push geometrically (the owner's
       // main false мах, 10.07: «поднимаю руку в область камеры — считывается
-      // как мах»); no shape splits arrival from a sweep, a settle does
-      this._tookPost = false;
+      // как мах»); no shape splits arrival from a sweep, a settle does.
+      // A tracking BLINK is not an arrival though: mid-scroll the tracker
+      // dropped his hand for ~0.4s and the fresh gate ate four honest pushes
+      // in a row (rage log 19:08, 75.1–77.6) — the same hand back within a
+      // breath keeps its post.
+      if (now - (this._leftAt || -1e9) > 900) this._tookPost = false;
       this._emit('enter', {});
     }
 
@@ -639,7 +644,15 @@ export class Gestures extends EventTarget {
         // (the owner's timing law, 10.07: a word that changed nothing extends
         // no silence) — candidates arm the guard once; a FIRED down re-arms
         // it in full in the emit branch.
-        if (sdirY === 'down' && (!this._palmMomDown || now >= this._palmMomDown.until))
+        // And the corridor of a just-fired UP arms nothing at all. His scroll
+        // is a rhythm — push, hand comes down, push again — and the return,
+        // already knowledge (↩home), used to arm this guard against the very
+        // next push: rage log 19:08 counted 14 swallowed pushes against 5
+        // fired. A down inside the up's own corridor IS that return, not a
+        // new travel.
+        const upOwns = pm && now < pm.until;
+        if (sdirY === 'down' && !upOwns &&
+            (!this._palmMomDown || now >= this._palmMomDown.until))
           this._palmMomDown = { vel: Math.abs(v.vy), until: now + 1400 };
         // purity is directional — and UP is deliberately CHEAP. Its real
         // parasites are covered by KNOWLEDGE, not shape: the finger's trip
@@ -738,7 +751,7 @@ export class Gestures extends EventTarget {
     this._pinched = false;
     this._grabLive = false;
     this._hasCursor = false;
-    this._tookPost = false;
+    this._leftAt = performance.now();
     this._samples.length = 0;
     this._relSamples.length = 0;
     this._relDisp = 0;
