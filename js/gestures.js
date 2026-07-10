@@ -61,6 +61,7 @@ export class Gestures extends EventTarget {
     this._relSamples = [];        // fingertip minus palm — the lazy-finger signal
     this._relDisp = 0;
     this._flickHoldUntil = 0;
+    this._tookPost = false;             // a newborn hand has not stood its post yet
     this._pinchBlockUntil = 0;    // no grabs while a flick's hand comes home
     // READING DIRECTION per axis (kinetic-scroll practice): in the air the
     // finger's trip home IS the opposite gesture — no glass to lift off from,
@@ -173,6 +174,11 @@ export class Gestures extends EventTarget {
       // log showed instant 0.3s phantom grabs right after enter; let the
       // baselines breathe before a pinch may engage
       this._pinchBlockUntil = Math.max(this._pinchBlockUntil, now + 280);
+      // and it may not SWIPE at all until it has stood still once — the rise
+      // into the camera's field IS a reading-push geometrically (the owner's
+      // main false мах, 10.07: «поднимаю руку в область камеры — считывается
+      // как мах»); no shape splits arrival from a sweep, a settle does
+      this._tookPost = false;
       this._emit('enter', {});
     }
 
@@ -587,13 +593,23 @@ export class Gestures extends EventTarget {
       const s0 = this._samples[0];
       const dx = this.cursor.x - s0.x;
       const dy = this.cursor.y - s0.y;
+      // the post-stamp: once the hand has stood ~still across one sample
+      // window, it has taken its post — only then may it swipe
+      if (Math.hypot(dx, dy) < window.innerHeight * 0.03) this._tookPost = true;
       const v = this._velocity();
       const pure = this._samples.every((s) => s.o > 1.05 && s.p > 0.45);
       const sdir = dx > 0 ? 'right' : 'left';
       const sm = this._mom.x;   // swipes share the reading direction with flicks
       const sReturn = sm && sdir !== sm.dir && now < sm.until &&
         Math.abs(v.vx) < Math.max(1600, sm.vel * 1.55);
-      if (Math.abs(dx) > window.innerWidth * 0.13 &&
+      if (!this._tookPost &&
+          (Math.abs(dx) > window.innerWidth * 0.13 ||
+           Math.abs(dy) > window.innerHeight * 0.18)) {
+        // arrival, not a word — swallowed whole, and (the owner's timing
+        // law) it touches no timers on its way out
+        this._samples.length = 0;
+        this._note('swipe ↩arrival', '');
+      } else if (Math.abs(dx) > window.innerWidth * 0.13 &&
           Math.abs(dx) > Math.abs(dy) * 1.6 && Math.abs(v.vx) > 1000) {
         if (sReturn) {
           this._note('swipe ↩return', sdir);
@@ -619,7 +635,12 @@ export class Gestures extends EventTarget {
         // back up, and with peak-based purity that return photographs as an
         // honest reading-push (field log 02:29: "откуда мах вверх?" — from
         // the returns). Same escape as every home-guard: decisively harder.
-        if (sdirY === 'down') this._palmMomDown = { vel: Math.abs(v.vy), until: now + 1400 };
+        // But a SERIES of refused candidates may not keep pushing the window
+        // (the owner's timing law, 10.07: a word that changed nothing extends
+        // no silence) — candidates arm the guard once; a FIRED down re-arms
+        // it in full in the emit branch.
+        if (sdirY === 'down' && (!this._palmMomDown || now >= this._palmMomDown.until))
+          this._palmMomDown = { vel: Math.abs(v.vy), until: now + 1400 };
         // purity is directional — and UP is deliberately CHEAP. Its real
         // parasites are covered by KNOWLEDGE, not shape: the finger's trip
         // home is muted because the snap announced itself (↩finger-home),
@@ -665,10 +686,15 @@ export class Gestures extends EventTarget {
           // after a big stroke still folds finger by finger.
           this._samples.length = 0;
           this._relSamples.length = 0;
-          this._fistCooldownUntil = Math.max(this._fistCooldownUntil, now + 1500);
+          // arm-once, never extend (the owner's timing law): a stream of
+          // dead words must not hold the fist silent forever
+          if (now >= this._fistCooldownUntil) this._fistCooldownUntil = now + 1500;
           this._note(`swipe ✗${sdirY}`, 'dead-here');
         } else {
           this._palmMom = sdirY === 'up' ? { vel: Math.abs(v.vy), until: now + 2200 } : null;
+          // a fired down is a real word — its homeward corridor is knowledge,
+          // re-armed in full regardless of the arm-once rule for candidates
+          if (sdirY === 'down') this._palmMomDown = { vel: Math.abs(v.vy), until: now + 1400 };
           // 700: one sweep, one word — at 450 a long push re-qualified out
           // of its own continuation and double-stepped (field log 03:33:
           // swipe-up pairs 500–600ms apart); his natural re-stroke rhythm
@@ -712,6 +738,7 @@ export class Gestures extends EventTarget {
     this._pinched = false;
     this._grabLive = false;
     this._hasCursor = false;
+    this._tookPost = false;
     this._samples.length = 0;
     this._relSamples.length = 0;
     this._relDisp = 0;
