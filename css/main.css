@@ -638,8 +638,14 @@ body.is-mobile { overflow-y: auto; overflow-x: hidden; }
 }
 body.is-mobile.space-open #space-bar { opacity: 1; }
 .is-mobile #space-close {
-  top: 11px !important; right: 14px !important; z-index: 41;
+  /* centred on the bar's single line: fixed glyph size (no JS measuring
+     on mobile), the desktop label/bar children hidden */
+  --cross: 22px;
+  top: 10px !important; right: 14px !important; z-index: 41;
+  padding: 6px;
 }
+.is-mobile #space-close .n-label,
+.is-mobile #space-close .n-bar { display: none; }
 .is-mobile #space-inner { padding-top: 84px !important; }
 /* the corners yield to the modal bar: dimbo and the language switch would
    double the header and sit on the cross */
@@ -667,9 +673,19 @@ body.is-mobile.space-open .corner.tr {
   transition: color 0.3s;
 }
 #ghint-t:hover { color: #d9a35d; }
-#ghint ul { list-style: none; margin-top: 8px; display: none; }
+#ghint ul { list-style: none; margin-top: 4px; display: none; }
 #ghint.open ul { display: block; }
 #ghint.open #ghint-t { color: #d9a35d; }
-#ghint li { line-height: 2.0; color: rgba(217, 163, 93, 0.92); white-space: nowrap; }
+/* one pattern per line, borrowed from the chapters' own metrics: the
+   gesture bright, the outcome dim; amber stays a MARK (toggle + group
+   headers), not a text colour — as on the form, where amber lives only
+   on the nearest depth band */
+#ghint li { line-height: 1.75; color: var(--ink-dim); white-space: nowrap; }
+#ghint li b { font-weight: 400; color: var(--ink); }
+#ghint li.gh-h {
+  color: rgba(217, 163, 93, 0.85); font-size: 10px;
+  letter-spacing: 0.22em; margin: 12px 0 2px;
+}
+#ghint li.gh-h:first-child { margin-top: 2px; }
 body.glyph-on #ghint { opacity: 0; }
 .is-mobile #ghint { display: none !important; }

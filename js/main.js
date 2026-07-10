@@ -499,7 +499,8 @@ function boot() {
   $('space-close').addEventListener('click', () => closeSpace());
 
   $('ghint-t').addEventListener('click', () => {
-    app.ghintOpen = !(app.ghintOpen ?? (app.ghintCtx === 'present'));
+    app.ghintOpen = !(app.ghintOpen ??
+      (app.ghintCtx === 'present' && !localStorage.getItem('gl_open')));
     syncGhint();
   });
 
@@ -904,12 +905,19 @@ function syncGhint() {
   if (!ctx) { g.classList.add('hidden'); app.ghintCtx = null; return; }
   if (ctx !== app.ghintCtx) app.ghintOpen = null;   // each screen, its default
   app.ghintCtx = ctx;
-  const open = app.ghintOpen ?? (ctx === 'present');
+  // the fork's hint is expanded only until the hands succeed once: the
+  // same learned flag that retires the node sub-hint (owner's rule, and
+  // it applies to the fork ONLY — chapters always start collapsed)
+  const open = app.ghintOpen ??
+    (ctx === 'present' && !localStorage.getItem('gl_open'));
   g.classList.remove('hidden');
   g.classList.toggle('left', ctx === 'right');
   g.classList.toggle('open', open);
   $('ghint-t').textContent = `${UI.ghint.t[lang]} ${open ? '\u2212' : '+'}`;
-  $('ghint-l').innerHTML = UI.ghint[ctx][lang].map((s) => `<li>${s}</li>`).join('');
+  $('ghint-l').innerHTML = UI.ghint[ctx][lang].map((grp) =>
+    (grp.h ? `<li class="gh-h">${grp.h}</li>` : '') +
+    grp.items.map(([a, b]) => `<li><b>${a}</b> — ${b}</li>`).join('')
+  ).join('');
 }
 
 function syncCalm() {
