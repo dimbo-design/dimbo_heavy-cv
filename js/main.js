@@ -221,6 +221,14 @@ if (new URLSearchParams(location.search).has('debug')) {
   addEventListener('DOMContentLoaded', () => $('debug')?.classList.remove('hidden'));
 }
 
+// ?zero — the photo booth: only the particle form, no interface at all.
+// Hands and gestures never start, nodes never reveal (which also silences
+// the ghost — it needs nodes to reach for). The owner's screenshot mode.
+const isZero = new URLSearchParams(location.search).has('zero');
+if (isZero) {
+  addEventListener('DOMContentLoaded', () => document.body.classList.add('zero'));
+}
+
 if (isMobile) {
   mobileBoot();
 } else {
@@ -579,7 +587,7 @@ async function requestCamera() {
     app.state = 'watching';
     app.field.setTargets({ coherence: CONFIG.coherence.watching });
     document.body.classList.add('camera-on');
-    app.hands.init(app.engine.video);
+    if (!isZero) app.hands.init(app.engine.video);
     app.pose.init(app.engine.video);
     app.pose.start();                 // runs while watching too — it IS the doorman
   } catch (_) {
@@ -606,7 +614,7 @@ function enterPresent() {
   app.state = 'present';
   app.presentSince = performance.now();
   app.field.setTargets({ coherence: CONFIG.coherence.present });
-  app.hands.start();
+  if (!isZero) app.hands.start();
   applyCadence();
   syncGhint();
   setTimeout(() => {
@@ -622,7 +630,7 @@ function leavePresent() {
   app.field.setTargets({ coherence: CONFIG.coherence.watching });
   document.body.classList.remove('named', 'nodes-on', 'hand-on');
   closeSpace();
-  app.hands.stop();
+  if (!isZero) app.hands.stop();
   applyCadence();
   for (const el of document.querySelectorAll('.node')) el.classList.remove('shown', 'focus');
   app.focusedId = null;
@@ -1368,7 +1376,7 @@ function loopBody(t) {
         glyphOn ? clamp((0.5 - signals.cy) * 0.7, -0.8, 0.8) : 0,
         glyphOn ? 1 : 0);
       const nodesDelay = returning ? CONFIG.reveal.nodesMs * 0.45 : CONFIG.reveal.nodesMs;
-      if (!app.nodesShown && t - app.presentSince > nodesDelay) revealNodes();
+      if (!isZero && !app.nodesShown && t - app.presentSince > nodesDelay) revealNodes();
       if (app.nodesShown && !app.spaceId) updateNodes(headX, handActive);
     } else if (app.state === 'asleep' && app.nodesShown) {
       updateNodes(0, false, false);

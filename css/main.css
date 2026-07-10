@@ -699,3 +699,10 @@ body.is-mobile.space-open .corner.tr {
 #ghint li.gh-h:first-child { margin-top: 2px; }
 body.glyph-on #ghint { opacity: 0; }
 .is-mobile #ghint { display: none !important; }
+
+/* ?zero — the photo booth: nothing but the particle form on stage.
+   The vignette and grain stay: they are the fabric of the frame, not UI. */
+body.zero .corner, body.zero #identity, body.zero #nodes, body.zero #ghint,
+body.zero #cursor, body.zero #scroll-hint, body.zero #invite-s2 {
+  display: none !important;
+}

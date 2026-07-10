@@ -89,8 +89,10 @@ URL) — telemetry and the full-session gesture journal, cycling: full →
 minimal → hidden; the “copy log” button (or `⌥C`) puts the journal on the
 clipboard and deliberately outlives the hidden panel; “rec” (`⌥R`) records a
 raw hand trace (15 Hz) that attaches to the copied journal. `?fresh` — the
-site forgets you have been here (first-touch testing). Texts and photos are
-edited per [CONTENT.md](CONTENT.md); gesture thresholds live in `js/config.js`.
+site forgets you have been here (first-touch testing). `?zero` — the photo
+booth: only the particle form on stage, no interface, hands and gestures
+never start (screenshot material). Texts and photos are edited per
+[CONTENT.md](CONTENT.md); gesture thresholds live in `js/config.js`.
 
 ## Running locally
 
