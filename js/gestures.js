@@ -536,8 +536,15 @@ export class Gestures extends EventTarget {
           ...this._relSamples.map((s) => s.rd || 0));
         const inFlight = this._relDisp >= 0.09;
         const ext = Math.max(...this._relSamples.map((s) => s.o)) - r0.o;
+        // the palm gates allow an honest SHAKE, not a ride (owner, 10.07:
+        // «допусти лёгкую тряску ладони при щелчке») — his real snaps sit at
+        // pd 0.07–0.16 and the old 0.06 bar starved all of them (rage log
+        // 19:31: 0 of 15 fired, and every refusal's recovery then flew as a
+        // false мах). All 32 fixtures, the four retired whips included, stay
+        // silent at these bars — the whip is caught by ext and burst, not by
+        // the palm gate alone.
         if (strokeY && !inFlight && r0.o > 0.4 && burst > 0.15 &&
-            palmDisp < 0.06 && palmDrift < 0.09 &&
+            palmDisp < 0.13 && palmDrift < 0.15 &&
             ext > 0.14 && ext < 0.6) {
           axis = 'y'; dir = 'down';
           vel = (dry * window.innerHeight * this.gain) / rdt;
@@ -553,8 +560,8 @@ export class Gestures extends EventTarget {
           // still being spoken)
           if (r0.o <= 0.4) this._note('flick↓ ✗from-fist', `o ${r0.o.toFixed(2)}`);
           else if (burst <= 0.15) this._note('flick↓ ✗limp', `burst ${burst.toFixed(2)}`);
-          else if (palmDisp >= 0.06) this._note('flick↓ ✗palm-moved', `pd ${palmDisp.toFixed(2)}`);
-          else if (palmDrift >= 0.09) this._note('flick↓ ✗palm-drift', palmDrift.toFixed(3));
+          else if (palmDisp >= 0.13) this._note('flick↓ ✗palm-moved', `pd ${palmDisp.toFixed(2)}`);
+          else if (palmDrift >= 0.15) this._note('flick↓ ✗palm-drift', palmDrift.toFixed(3));
           else if (ext >= 0.6) this._note('flick↓ ✗whip-shape', `ext ${ext.toFixed(2)}`);
           else this._note('flick↓ ✗no-extension', `ext ${ext.toFixed(2)}`);
         }
