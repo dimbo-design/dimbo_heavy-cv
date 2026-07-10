@@ -498,6 +498,11 @@ function boot() {
 
   $('space-close').addEventListener('click', () => closeSpace());
 
+  $('ghint-t').addEventListener('click', () => {
+    app.ghintOpen = !(app.ghintOpen ?? (app.ghintCtx === 'present'));
+    syncGhint();
+  });
+
   $('asleep-action').addEventListener('click', () => {
     hide('asleep');
     $('asleep').classList.remove('quiet');
@@ -531,7 +536,8 @@ function boot() {
     const fig = e.target.closest('#space-inner figure');
     if (fig) { openLightbox(fig); return; }
     if (app.spaceId && !e.target.closest('#space-inner') &&
-        !e.target.closest('.node') && !e.target.closest('#lang')) {
+        !e.target.closest('.node') && !e.target.closest('#lang') &&
+        !e.target.closest('#ghint')) {
       closeSpace();
     }
   });
@@ -596,12 +602,14 @@ function enterPresent() {
   app.field.setTargets({ coherence: CONFIG.coherence.present });
   app.hands.start();
   applyCadence();
+  syncGhint();
   setTimeout(() => {
     if (app.state === 'present') document.body.classList.add('named');
   }, CONFIG.reveal.nameMs);
 }
 
 function leavePresent() {
+  setTimeout(syncGhint, 0);   // after the state settles below
   app.field.triggerExhale();                 // the imprint breathes out
   app.state = 'watching';
   app.nodesShown = false;
@@ -684,6 +692,7 @@ function openSpace(id) {
   document.body.classList.add('space-open');
   app.field?.setPose(node.pose || { x: 0.46, rotY: -0.5, scale: 0.9, dim: 0 });
   applyCadence();
+  syncGhint();
 }
 
 // the cross sits beside the REAL first line of the title — measured, not
@@ -700,7 +709,10 @@ function renderSpaceContent(node) {
   const sc = $('space-close');
   $('space').appendChild(sc);                 // step out before the wipe
   inner.innerHTML = renderPanel(node, lang);
-  inner.appendChild(sc);                      // ride the sheet
+  // on mobile the cross lives in the fixed bar: the sheet's will-change
+  // turns any "fixed" child into its passenger (it scrolled away — WTF
+  // of 09.07); on desktop it rides the sheet by design
+  if (!isMobile) inner.appendChild(sc);
   collectStrips();
   requestAnimationFrame(() => requestAnimationFrame(positionCloseCross));
 }
@@ -708,6 +720,7 @@ function renderSpaceContent(node) {
 // Y — the title's first-line axis; X — beyond the column width, both
 // measured relative to the sheet the cross now lives in
 function positionCloseCross() {
+  if (isMobile) return;   // pinned in the modal bar by CSS
   const sc = $('space-close');
   const h2 = document.querySelector('#space-inner h2');
   if (!sc || !h2 || !app.spaceId) return;
@@ -739,6 +752,7 @@ function closeSpace() {
   document.body.classList.remove('space-open');
   app.field?.setPose(null);
   applyCadence();
+  syncGhint();
 }
 
 function collectStrips() {
@@ -873,6 +887,31 @@ function onSpreadMove({ scale }) {
 
 // the zoomed state's vocabulary shrinks to fist/pinch/spread/open palm —
 // at the DETECTION level: a silenced swipe still poisons cooldowns
+// the gesture hint (owner's spec): a toggle above, a terse amber list of
+// what the hands can say HERE. Three contexts: the fork (expanded by
+// default, top-right under the language switch), a left chapter (collapsed,
+// top-right), a right chapter (collapsed, top-LEFT under dimbo — the
+// switch side stays clear of the reading column). Camera-mode only: the
+// quiet mouse tiers have no gestures to hint at.
+function syncGhint() {
+  const g = $('ghint');
+  if (!g) return;
+  let ctx = null;
+  if (app.gestures && app.cameraOn && !app.lb) {
+    if (app.spaceId) ctx = document.body.classList.contains('space-right') ? 'right' : 'left';
+    else if (app.state === 'present') ctx = 'present';
+  }
+  if (!ctx) { g.classList.add('hidden'); app.ghintCtx = null; return; }
+  if (ctx !== app.ghintCtx) app.ghintOpen = null;   // each screen, its default
+  app.ghintCtx = ctx;
+  const open = app.ghintOpen ?? (ctx === 'present');
+  g.classList.remove('hidden');
+  g.classList.toggle('left', ctx === 'right');
+  g.classList.toggle('open', open);
+  $('ghint-t').textContent = `${UI.ghint.t[lang]} ${open ? '\u2212' : '+'}`;
+  $('ghint-l').innerHTML = UI.ghint[ctx][lang].map((s) => `<li>${s}</li>`).join('');
+}
+
 function syncCalm() {
   if (app.gestures) app.gestures.calmActs = !!(app.lb && app.lb.zoom > 1.05);
 }
@@ -1099,6 +1138,7 @@ function openLightbox(fig) {
     app.gestures.flickXEnabled = true;  // sideways flicks walk the photos
   }
   syncPalmVocab();
+  syncGhint();
   flipFrom(fig);
 }
 
@@ -1219,6 +1259,7 @@ function closeLightbox() {
       !!app.spaceId && !document.body.classList.contains('space-right');
   }
   syncPalmVocab();
+  syncGhint();
   document.body.classList.remove('lb-open');
 }
 
@@ -1757,6 +1798,7 @@ function setLang(l) {
   localStorage.setItem('lang', l);
   renderStatic();
   localizeNodes();
+  syncGhint();
   if (app.spaceId) {
     renderSpaceContent(NODES.find((n) => n.id === app.spaceId));
   }

@@ -649,3 +649,27 @@ body.is-mobile.space-open .corner.tr {
 }
 /* on touch there is no dwell to bloom the cross — it must simply be seen */
 .is-mobile #space-close svg line { stroke: var(--ink-dim); }
+
+/* ── the gesture hint: amber, the form's own accent (#d9a35d) ─────────
+   a toggle above, a terse technical list below — readable, unlike the
+   telemetry it echoes */
+#ghint {
+  position: fixed; top: 62px; right: 34px; z-index: 50;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em;
+  text-align: right;
+  text-shadow: 0 0 8px rgba(10, 10, 13, 0.95), 0 0 18px rgba(10, 10, 13, 0.8);
+  transition: opacity 0.4s;
+}
+#ghint.left { right: auto; left: 34px; text-align: left; }
+#ghint-t {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em;
+  color: rgba(217, 163, 93, 0.75); padding: 4px 0;
+  transition: color 0.3s;
+}
+#ghint-t:hover { color: #d9a35d; }
+#ghint ul { list-style: none; margin-top: 8px; display: none; }
+#ghint.open ul { display: block; }
+#ghint.open #ghint-t { color: #d9a35d; }
+#ghint li { line-height: 2.0; color: rgba(217, 163, 93, 0.92); white-space: nowrap; }
+body.glyph-on #ghint { opacity: 0; }
+.is-mobile #ghint { display: none !important; }

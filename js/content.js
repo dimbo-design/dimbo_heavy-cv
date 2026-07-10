@@ -294,6 +294,43 @@ export const UI = {
     en: 'this site is built for desktop: there the camera assembles your reflection from particles, and hands drive the interface. reading works here — the vibe lives on a computer',
   },
 
+  // the gesture hint: terse technical lines, per screen (owner's spec)
+  ghint: {
+    t: { ru: 'жесты', en: 'gestures' },
+    present: {
+      ru: ['наведите руку на пункт — он откроется'],
+      en: ['hold a hand over an item — it opens'],
+    },
+    left: {
+      ru: [
+        'скролл · щипок + движение',
+        'ещё · мах ладонью вверх / щелчок пальцем вниз',
+        'фото · сжать кулак — взять',
+        'листать · кулак вбок',
+        'закрыть фото · раскрыть ладонь',
+        'зум · две ладони врозь · кулак таскает кадр',
+      ],
+      en: [
+        'scroll · pinch + move',
+        'also · palm sweep up / finger snap down',
+        'photo · clench a fist — take it',
+        'flip · carry the fist sideways',
+        'close photo · open the palm',
+        'zoom · two palms apart · the fist drags the frame',
+      ],
+    },
+    right: {
+      ru: [
+        'скролл · щипок + движение',
+        'ещё · мах ладонью вверх / щелчок пальцем вниз',
+      ],
+      en: [
+        'scroll · pinch + move',
+        'also · palm sweep up / finger snap down',
+      ],
+    },
+  },
+
   denied: {
     h:  { ru: 'Договорились. Интерфейс останется спящим.',
           en: 'Fair enough. The interface will stay asleep.' },
