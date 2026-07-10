@@ -63,7 +63,7 @@ export const CONFIG = {
 
   reveal: {
     nameMs: 900,          // name appears after presence confirmed
-    nodesMs: 3200,        // content nodes appear after dwell
+    nodesMs: 2560,        // content nodes appear after dwell (3200 −20%: owner)
     stagger: 90,
   },
 

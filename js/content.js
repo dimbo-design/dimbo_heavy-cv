@@ -300,15 +300,17 @@ export const UI = {
   ghint: {
     t: { ru: 'жесты', en: 'gestures' },
     present: {
-      ru: [{ h: null, items: [['ладонь на пункт', 'он откроется']] }],
-      en: [{ h: null, items: [['a palm over an item', 'it opens']] }],
+      // the cursor rides the FINGER (index+palm blend) — the owner caught
+      // the old «ладонь на пункт» as plain wrong: you point, not wave
+      ru: [{ h: null, items: [['палец на пункт', 'он откроется']] }],
+      en: [{ h: null, items: [['a finger on an item', 'it opens']] }],
     },
     left: {
       ru: [
         { h: 'скролл', items: [
           ['щипок и движение', 'точный скролл'],
-          ['мах ладонью вверх', 'читать дальше'],
-          ['щелчок пальцем вниз', 'шаг назад'],
+          ['мах ладонью вверх', 'дальше'],
+          ['щелчок пальцем вниз', 'назад'],
         ] },
         { h: 'фото', items: [
           ['сжать кулак', 'взять ближайшее'],
@@ -323,8 +325,8 @@ export const UI = {
       en: [
         { h: 'scroll', items: [
           ['pinch and move', 'precise scroll'],
-          ['palm sweep up', 'read on'],
-          ['finger snap down', 'a step back'],
+          ['palm sweep up', 'forward'],
+          ['finger snap down', 'back'],
         ] },
         { h: 'photos', items: [
           ['clench a fist', 'take the nearest'],
@@ -341,15 +343,15 @@ export const UI = {
       ru: [
         { h: 'скролл', items: [
           ['щипок и движение', 'точный скролл'],
-          ['мах ладонью вверх', 'читать дальше'],
-          ['щелчок пальцем вниз', 'шаг назад'],
+          ['мах ладонью вверх', 'дальше'],
+          ['щелчок пальцем вниз', 'назад'],
         ] },
       ],
       en: [
         { h: 'scroll', items: [
           ['pinch and move', 'precise scroll'],
-          ['palm sweep up', 'read on'],
-          ['finger snap down', 'a step back'],
+          ['palm sweep up', 'forward'],
+          ['finger snap down', 'back'],
         ] },
       ],
     },
