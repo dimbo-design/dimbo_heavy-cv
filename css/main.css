@@ -257,7 +257,12 @@ body.space-open #identity { opacity: 0.1; }
   opacity: 0; transition: opacity 0.9s var(--ease);
 }
 body.space-open #space-scrim { opacity: 1; }
-body.space-open #space { pointer-events: auto; }
+/* the sheet layer sits ABOVE the hint (z35 > z30) but must not swallow its
+   clicks: only the content itself takes events — the empty field around the
+   column stays transparent to the mouse, so the hint opens without closing
+   the chapter (and a click into the void still reads as click-out below) */
+body.space-open #space-inner { pointer-events: auto; }
+body.is-mobile.space-open #space { pointer-events: auto; }
 
 #space-scroll {
   position: absolute; left: 0; top: 0; bottom: 0; right: 0;
