@@ -204,6 +204,8 @@ const app = {
   hold: { p: 0, target: null, until: 0 },
   ghost: null, lastGhostAt: 0, lastHandAt: 0,   // the reflection demonstrates
   mouseAt: null, mouseHover: null,              // …and answers the mouse
+  ghintOpen: {}, ghintCtx: null,                // the visitor's own toggle,
+                                                // sticky per screen, all session
   lbCooldownUntil: 0,
   scroll: { y: 0, target: 0, vel: 0, max: 0, over: 0 },
   pageX: 0, pageXVel: 0,    // chapter grabbed/thrown sideways
@@ -499,8 +501,11 @@ function boot() {
   $('space-close').addEventListener('click', () => closeSpace());
 
   $('ghint-t').addEventListener('click', () => {
-    app.ghintOpen = !(app.ghintOpen ??
-      (app.ghintCtx === 'present' && !localStorage.getItem('gl_open')));
+    const c = app.ghintCtx;
+    if (!c) return;
+    const cur = app.ghintOpen[c] ??
+      (c === 'present' && !localStorage.getItem('gl_open'));
+    app.ghintOpen[c] = !cur;
     syncGhint();
   });
 
@@ -903,12 +908,14 @@ function syncGhint() {
     else if (app.state === 'present') ctx = 'present';
   }
   if (!ctx) { g.classList.add('hidden'); app.ghintCtx = null; return; }
-  if (ctx !== app.ghintCtx) app.ghintOpen = null;   // each screen, its default
   app.ghintCtx = ctx;
-  // the fork's hint is expanded only until the hands succeed once: the
-  // same learned flag that retires the node sub-hint (owner's rule, and
-  // it applies to the fork ONLY — chapters always start collapsed)
-  const open = app.ghintOpen ??
+  // the visitor's toggle is STICKY per screen for the whole session — a
+  // lightbox trip or any other gesture must never fold what he opened
+  // (owner's hard rule). The ONLY automatic dimming lives on the fork:
+  // expanded until the hands succeed once (the same learned flag that
+  // retires the node sub-hint), collapsed ever after. Chapters simply
+  // start collapsed and then obey the visitor.
+  const open = app.ghintOpen[ctx] ??
     (ctx === 'present' && !localStorage.getItem('gl_open'));
   g.classList.remove('hidden');
   g.classList.toggle('left', ctx === 'right');
