@@ -81,7 +81,9 @@ a:hover { border-bottom-color: var(--ink-dim); }
 }
 .corner.tl { top: 28px; left: 34px; }
 .corner.tr { top: 28px; right: 34px; }
-.corner.br { bottom: 26px; right: 34px; text-align: right; }
+.corner.br { bottom: 26px; right: 34px; text-align: right;
+  z-index: 30;   /* telemetry yields to the chapter sheet, same as the hint */
+}
 
 #lang button { color: var(--ink-faint); letter-spacing: 0.14em; transition: color 0.4s; padding: 4px 2px; }
 #lang button.on { color: var(--ink); }
@@ -255,7 +257,12 @@ body.space-open #identity { opacity: 0.1; }
   opacity: 0; transition: opacity 0.9s var(--ease);
 }
 body.space-open #space-scrim { opacity: 1; }
-body.space-open #space { pointer-events: auto; }
+/* the sheet layer sits ABOVE the hint (z35 > z30) but must not swallow its
+   clicks: only the content itself takes events — the empty field around the
+   column stays transparent to the mouse, so the hint opens without closing
+   the chapter (and a click into the void still reads as click-out below) */
+body.space-open #space-inner { pointer-events: auto; }
+body.is-mobile.space-open #space { pointer-events: auto; }
 
 #space-scroll {
   position: absolute; left: 0; top: 0; bottom: 0; right: 0;
@@ -638,8 +645,14 @@ body.is-mobile { overflow-y: auto; overflow-x: hidden; }
 }
 body.is-mobile.space-open #space-bar { opacity: 1; }
 .is-mobile #space-close {
-  top: 11px !important; right: 14px !important; z-index: 41;
+  /* centred on the bar's single line: fixed glyph size (no JS measuring
+     on mobile), the desktop label/bar children hidden */
+  --cross: 22px;
+  top: 10px !important; right: 14px !important; z-index: 41;
+  padding: 6px;
 }
+.is-mobile #space-close .n-label,
+.is-mobile #space-close .n-bar { display: none; }
 .is-mobile #space-inner { padding-top: 84px !important; }
 /* the corners yield to the modal bar: dimbo and the language switch would
    double the header and sit on the cross */
@@ -654,7 +667,10 @@ body.is-mobile.space-open .corner.tr {
    a toggle above, a terse technical list below — readable, unlike the
    telemetry it echoes */
 #ghint {
-  position: fixed; top: 62px; right: 34px; z-index: 50;
+  /* UNDER the chapter content (z35): a strip photo sliding beneath an
+     overlaying hint read as debris — the sheet now covers both quiet
+     corners (owner's call, 09.07) */
+  position: fixed; top: 62px; right: 34px; z-index: 30;
   font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em;
   text-align: right;
   text-shadow: 0 0 8px rgba(10, 10, 13, 0.95), 0 0 18px rgba(10, 10, 13, 0.8);
@@ -667,9 +683,19 @@ body.is-mobile.space-open .corner.tr {
   transition: color 0.3s;
 }
 #ghint-t:hover { color: #d9a35d; }
-#ghint ul { list-style: none; margin-top: 8px; display: none; }
+#ghint ul { list-style: none; margin-top: 4px; display: none; }
 #ghint.open ul { display: block; }
 #ghint.open #ghint-t { color: #d9a35d; }
-#ghint li { line-height: 2.0; color: rgba(217, 163, 93, 0.92); white-space: nowrap; }
+/* one pattern per line, borrowed from the chapters' own metrics: the
+   gesture bright, the outcome dim; amber stays a MARK (toggle + group
+   headers), not a text colour — as on the form, where amber lives only
+   on the nearest depth band */
+#ghint li { line-height: 1.75; color: var(--ink-dim); white-space: nowrap; }
+#ghint li b { font-weight: 400; color: var(--ink); }
+#ghint li.gh-h {
+  color: rgba(217, 163, 93, 0.85); font-size: 10px;
+  letter-spacing: 0.22em; margin: 12px 0 2px;
+}
+#ghint li.gh-h:first-child { margin-top: 2px; }
 body.glyph-on #ghint { opacity: 0; }
 .is-mobile #ghint { display: none !important; }

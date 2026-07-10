@@ -294,39 +294,63 @@ export const UI = {
     en: 'this site is built for desktop: there the camera assembles your reflection from particles, and hands drive the interface. reading works here — the vibe lives on a computer',
   },
 
-  // the gesture hint: terse technical lines, per screen (owner's spec)
+  // the gesture hint: grouped like the chapters themselves — a kicker-style
+  // header per group, and one pattern per line: the gesture bright, the
+  // outcome dim (the metrics' own typography, reused)
   ghint: {
     t: { ru: 'жесты', en: 'gestures' },
     present: {
-      ru: ['наведите руку на пункт — он откроется'],
-      en: ['hold a hand over an item — it opens'],
+      ru: [{ h: null, items: [['ладонь на пункт', 'он откроется']] }],
+      en: [{ h: null, items: [['a palm over an item', 'it opens']] }],
     },
     left: {
       ru: [
-        'скролл · щипок + движение',
-        'ещё · мах ладонью вверх / щелчок пальцем вниз',
-        'фото · сжать кулак — взять',
-        'листать · кулак вбок',
-        'закрыть фото · раскрыть ладонь',
-        'зум · две ладони врозь · кулак таскает кадр',
+        { h: 'скролл', items: [
+          ['щипок и движение', 'точный скролл'],
+          ['мах ладонью вверх', 'читать дальше'],
+          ['щелчок пальцем вниз', 'шаг назад'],
+        ] },
+        { h: 'фото', items: [
+          ['сжать кулак', 'взять ближайшее'],
+          ['кулак вбок', 'листать'],
+          ['раскрыть ладонь', 'отпустить'],
+        ] },
+        { h: 'зум', items: [
+          ['две ладони врозь', 'приблизить'],
+          ['кулак', 'таскать кадр'],
+        ] },
       ],
       en: [
-        'scroll · pinch + move',
-        'also · palm sweep up / finger snap down',
-        'photo · clench a fist — take it',
-        'flip · carry the fist sideways',
-        'close photo · open the palm',
-        'zoom · two palms apart · the fist drags the frame',
+        { h: 'scroll', items: [
+          ['pinch and move', 'precise scroll'],
+          ['palm sweep up', 'read on'],
+          ['finger snap down', 'a step back'],
+        ] },
+        { h: 'photos', items: [
+          ['clench a fist', 'take the nearest'],
+          ['fist sideways', 'flip through'],
+          ['open the palm', 'let it go'],
+        ] },
+        { h: 'zoom', items: [
+          ['two palms apart', 'zoom in'],
+          ['the fist', 'drags the frame'],
+        ] },
       ],
     },
     right: {
       ru: [
-        'скролл · щипок + движение',
-        'ещё · мах ладонью вверх / щелчок пальцем вниз',
+        { h: 'скролл', items: [
+          ['щипок и движение', 'точный скролл'],
+          ['мах ладонью вверх', 'читать дальше'],
+          ['щелчок пальцем вниз', 'шаг назад'],
+        ] },
       ],
       en: [
-        'scroll · pinch + move',
-        'also · palm sweep up / finger snap down',
+        { h: 'scroll', items: [
+          ['pinch and move', 'precise scroll'],
+          ['palm sweep up', 'read on'],
+          ['finger snap down', 'a step back'],
+        ] },
       ],
     },
   },
