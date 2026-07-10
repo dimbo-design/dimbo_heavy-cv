@@ -318,7 +318,7 @@ export const UI = {
           ['раскрыть ладонь', 'отпустить'],
         ] },
         { h: 'зум', items: [
-          ['две ладони врозь', 'приблизить'],
+          ['ладони врозь · вместе', 'приблизить · отдалить'],
           ['кулак', 'таскать кадр'],
         ] },
       ],
@@ -334,7 +334,7 @@ export const UI = {
           ['open the palm', 'let it go'],
         ] },
         { h: 'zoom', items: [
-          ['two palms apart', 'zoom in'],
+          ['palms apart · together', 'zoom in · out'],
           ['the fist', 'drags the frame'],
         ] },
       ],
