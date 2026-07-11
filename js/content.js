@@ -264,9 +264,9 @@ export const NODES = [
 
 export const UI = {
   mark:  { ru: 'dimbo', en: 'dimbo' },
-  // one string everywhere, both locales — the tab, the card and the search
-  // result must never disagree (the runtime overwrites index.html's title)
-  title: { ru: 'Heavy CV with living interface · Dmitry Togulev', en: 'Heavy CV with living interface · Dmitry Togulev' },
+  // one statement, each locale in its own tongue (owner's pick); the card
+  // (og:title) stays English — scrapers read one title per page
+  title: { ru: 'Heavy CV с живым интерфейсом · Дмитрий Тогулев', en: 'Heavy CV with living interface · Dmitry Togulev' },
 
   name:  { ru: 'Дмитрий Тогулев', en: 'Dmitry Togulev' },
   role:  {
