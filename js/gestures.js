@@ -448,8 +448,17 @@ export class Gestures extends EventTarget {
       this._grabStart.x = this.cursor.x; this._grabStart.y = this.cursor.y;
       this._grabMoved = 0;
       this._grabLive = false;
+      this._grabVel = [];
     } else if (this.grabbing && wasGrabbing) {
       this._grabMoved += Math.hypot(this.cursor.x - px, this.cursor.y - py);
+      // the velocity is notarized while the word is still being spoken:
+      // un-pinching takes ~2 frames to confirm and the reach toward the
+      // next target starts inside them, so a release read "now" inherits
+      // the letting-go, not the drag (field case 12.07: pinch-scroll →
+      // reach for the cross → phantom read-on coast). The fling therefore
+      // uses the snapshot from ~120ms before the release confirmed.
+      this._grabVel.push({ t: now, v: this._velocity() });
+      while (this._grabVel.length && now - this._grabVel[0].t > 400) this._grabVel.shift();
       if (!this._grabLive && this._grabMoved > 14) {
         this._grabLive = true;
         this._emit('grabstart', { x: this._grabStart.x, y: this._grabStart.y });
@@ -468,7 +477,10 @@ export class Gestures extends EventTarget {
         this._emit('tap', { x: this.cursor.x, y: this.cursor.y });
         if (this._grabLive) this._emit('grabend', { vx: 0, vy: 0 });
       } else if (this._grabLive) {
-        this._emit('grabend', this._velocity());
+        const cut = now - 120;
+        let past = null;
+        for (const s of this._grabVel) { if (s.t <= cut) past = s; else break; }
+        this._emit('grabend', (past || this._grabVel[0] || { v: { vx: 0, vy: 0 } }).v);
       }
       this._grabLive = false;
     }

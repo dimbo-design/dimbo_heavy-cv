@@ -3,6 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>
+    // translators judge the page's tongue at parse time, when the body is
+    // still empty — the static lang="en" plus an English title made Yandex
+    // Browser auto-translate the Russian locale (field test 11.07). Mirror
+    // the runtime language rule before anything renders; main.js keeps the
+    // attribute in sync on every switch.
+    document.documentElement.lang =
+      localStorage.getItem('lang') ||
+      ((navigator.language || 'en').toLowerCase().startsWith('ru') ? 'ru' : 'en');
+  </script>
   <title>Heavy CV with living interface · Dmitry Togulev</title>
   <meta name="description" content="An experiment where the primary input is the camera: your reflection assembled out of particles, browsed with bare hands, right in the browser.">
   <meta property="og:title" content="Heavy CV with living interface · Dmitry Togulev">
