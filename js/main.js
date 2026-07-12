@@ -300,6 +300,10 @@ function boot() {
         ghost.play(frames, {
           gain: gestures.gain, loops: 3, mock: true,
           dim: (on) => field.setTeachDim(on),
+          // the hand plays over the sheet, and for the scroll story the
+          // sheet rides the pinch — the наглядность the hint exists for
+          anchorX: innerWidth * 0.08 + Math.min(280, innerWidth * 0.22),
+          follow: clip === 'scroll',
         });
       } catch { /* unknown clip name — the stage stays dark */ }
     }, 1800);

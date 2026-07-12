@@ -13,15 +13,14 @@
 // Trace format (what ⌥G copies): [{t, hands: [[[x,y,z]×21]…]}], camera
 // frame coords, x not yet mirrored — the same mapping gestures use.
 
-const CONNECTIONS = [
-  [0, 1], [1, 2], [2, 3], [3, 4],          // thumb
-  [0, 5], [5, 6], [6, 7], [7, 8],          // index
-  [5, 9], [9, 10], [10, 11], [11, 12],     // middle
-  [9, 13], [13, 14], [14, 15], [15, 16],   // ring
-  [13, 17], [17, 18], [18, 19], [19, 20],  // pinky
-  [0, 17],                                 // heel
+const FINGERS = [
+  [1, 2, 3, 4],        // thumb
+  [5, 6, 7, 8],        // index
+  [9, 10, 11, 12],     // middle
+  [13, 14, 15, 16],    // ring
+  [17, 18, 19, 20],    // pinky
 ];
-const TIPS = [4, 8, 12, 16, 20];
+const PALM = [0, 1, 5, 9, 13, 17];
 
 export const ghost = {
   stage: null, canvas: null, ctx: null, mock: null,
@@ -80,40 +79,93 @@ export const ghost = {
   hide() { this.stop(true); },   // instant blackout, no choreography
 
   // one hand, camera-frame landmarks → screen via the gestures mapping.
-  // The being speaks the site's language: PARTICLES, not wire (the
-  // owner's verdict, 12.07: the skeleton was functionally obvious but
-  // scared and broke the vibe) — dots seeded along every bone, joints a
-  // touch brighter, fingertips brightest. 15% smaller, folded around
-  // the palm centre so the clip keeps its position.
+  // The being is drawn the way the SITE draws a person (the owner's
+  // verdict, 12.07: dotted bones were still wire — he asked for the 3D
+  // form's own preview style): a filled silhouette sampled into a fixed
+  // screen lattice of particles. A mask canvas gets the hand's solid
+  // shape — palm polygon plus finger capsules — and the lattice lights
+  // up wherever the mask is inked, with the glyph relief's swell and
+  // grain so the dots vary the way the form's do. 15% smaller, folded
+  // around the palm centre so the clip keeps its position.
   drawHand(lm, alpha = 1) {
     const g = this.ctx, vw = innerWidth, vh = innerHeight;
     const cx = (lm[0][0] + lm[5][0] + lm[9][0] + lm[13][0] + lm[17][0]) / 5;
     const cy = (lm[0][1] + lm[5][1] + lm[9][1] + lm[13][1] + lm[17][1]) / 5;
     const s = 0.85;
-    const px = (p) => ((1 - (cx + (p[0] - cx) * s)) - 0.5) * this._gain * vw + vw / 2;
+    const px = (p) => ((1 - (cx + (p[0] - cx) * s + this._dx)) - 0.5) * this._gain * vw + vw / 2;
     const py = (p) => ((cy + (p[1] - cy) * s) - 0.5) * this._gain * vh + vh / 2;
-    const TAU = Math.PI * 2;
-    const dot = (x, y, r, a) => {
-      g.beginPath(); g.arc(x, y, r * 3, 0, TAU);
-      g.fillStyle = `rgba(${this._color}, ${a * 0.10})`; g.fill();
-      g.beginPath(); g.arc(x, y, r, 0, TAU);
-      g.fillStyle = `rgba(${this._color}, ${a})`; g.fill();
-    };
-    for (let ci = 0; ci < CONNECTIONS.length; ci++) {
-      const [i, j] = CONNECTIONS[ci];
-      const ax = px(lm[i]), ay = py(lm[i]), bx = px(lm[j]), by = py(lm[j]);
-      const n = Math.max(2, Math.round(Math.hypot(bx - ax, by - ay) / 9));
-      for (let k = 1; k < n; k++) {
-        const t = k / n;
-        // a deterministic breath of disorder — a straight dotted line
-        // would read as wire again
-        const jx = Math.sin((ci * 31 + k) * 12.9898) * 1.2;
-        const jy = Math.cos((ci * 17 + k) * 78.233) * 1.2;
-        dot(ax + (bx - ax) * t + jx, ay + (by - ay) * t + jy, 1.3, 0.5 * alpha);
-      }
+
+    // ---- the mask: half-resolution, hand shape as solid ink
+    if (!this._mask) {
+      this._mask = document.createElement('canvas');
+      this._mctx = this._mask.getContext('2d', { willReadFrequently: true });
     }
+    const M = 0.5;
+    const mw = Math.round(vw * M), mh = Math.round(vh * M);
+    if (this._mask.width !== mw) { this._mask.width = mw; this._mask.height = mh; }
+    const m = this._mctx;
+    m.setTransform(M, 0, 0, M, 0, 0);
+    m.clearRect(0, 0, vw, vh);
+    m.fillStyle = '#fff';
+    m.strokeStyle = '#fff';
+    m.lineCap = 'round';
+    m.lineJoin = 'round';
+    const P = (i) => [px(lm[i]), py(lm[i])];
+    // the palm: polygon through wrist and knuckles
+    m.beginPath();
+    PALM.forEach((i, k) => { const [x, y] = P(i); k ? m.lineTo(x, y) : m.moveTo(x, y); });
+    m.closePath();
+    m.fill();
+    // fingers: capsules, width scaled to the knuckle span
+    const [k5x, k5y] = P(5), [k17x, k17y] = P(17);
+    const span = Math.hypot(k17x - k5x, k17y - k5y);
+    m.lineWidth = Math.max(8, span * 0.30);
+    for (const chain of FINGERS) {
+      m.beginPath();
+      chain.forEach((i, k) => { const [x, y] = P(i); k ? m.lineTo(x, y) : m.moveTo(x, y); });
+      m.stroke();
+    }
+    // the heel: round out the wrist
+    m.lineWidth = Math.max(10, span * 0.5);
+    m.beginPath();
+    const [wx, wy] = P(0);
+    m.moveTo(wx, wy);
+    m.lineTo((k5x + k17x) / 2, (k5y + k17y) / 2);
+    m.stroke();
+
+    // ---- the lattice: fixed to the screen like the form's grid
+    let bx0 = 1e9, by0 = 1e9, bx1 = -1e9, by1 = -1e9;
     for (let i = 0; i < 21; i++) {
-      dot(px(lm[i]), py(lm[i]), TIPS.includes(i) ? 2.4 : 1.8, 0.85 * alpha);
+      const [x, y] = P(i);
+      bx0 = Math.min(bx0, x); bx1 = Math.max(bx1, x);
+      by0 = Math.min(by0, y); by1 = Math.max(by1, y);
+    }
+    const pad = Math.max(16, span * 0.4);
+    bx0 = Math.max(0, bx0 - pad); by0 = Math.max(0, by0 - pad);
+    bx1 = Math.min(vw, bx1 + pad); by1 = Math.min(vh, by1 + pad);
+    if (bx1 <= bx0 || by1 <= by0) return;
+    const img = m.getImageData(
+      Math.floor(bx0 * M), Math.floor(by0 * M),
+      Math.max(1, Math.ceil((bx1 - bx0) * M)), Math.max(1, Math.ceil((by1 - by0) * M)));
+    const STEP = 7;
+    const TAU = Math.PI * 2;
+    for (let y = Math.ceil(by0 / STEP) * STEP; y < by1; y += STEP) {
+      for (let x = Math.ceil(bx0 / STEP) * STEP; x < bx1; x += STEP) {
+        const ix = Math.floor((x - bx0) * M), iy = Math.floor((y - by0) * M);
+        const a = img.data[(iy * img.width + ix) * 4 + 3] / 255;
+        if (a < 0.25) continue;
+        // the glyph's relief: a slow swell plus fine grain — the dots
+        // vary the way a body's do (scene.js showGlyph, same recipe)
+        const swell = Math.sin(x * 0.23 + y * 0.31) * 0.16;
+        const grain = ((x * 73 + y * 149) % 13) / 12 * 0.34;
+        const lum = (0.50 + swell + grain) * a * alpha;
+        const jx = Math.sin((x * 7 + y) * 12.9898) * 1.4;
+        const jy = Math.cos((x + y * 11) * 78.233) * 1.4;
+        g.beginPath();
+        g.arc(x + jx, y + jy, 1.25 + a * 0.85, 0, TAU);
+        g.fillStyle = `rgba(${this._color}, ${lum})`;
+        g.fill();
+      }
     }
   },
 
@@ -129,6 +181,18 @@ export const ghost = {
     this._loops = opts.loops ?? 1;
     this._onend = opts.onend || null;
     this._dim = opts.dim || null;
+    this._follow = !!opts.follow;
+    this._sheet = { y: 0, grab: null };
+    // anchor: shift the whole clip so the hand plays OVER the sheet —
+    // the clips were recorded over a right-side chapter, the mock sits
+    // left, and a hint pointing at empty space teaches nothing
+    this._dx = 0;
+    if (opts.anchorX != null) {
+      let sum = 0, n = 0;
+      for (const f of frames) if (f.hands[0]) { sum += f.hands[0][9][0]; n++; }
+      const cur = ((1 - sum / n) - 0.5) * this._gain * innerWidth + innerWidth / 2;
+      this._dx = -(opts.anchorX - cur) / (this._gain * innerWidth);
+    }
     this._t0 = performance.now() / 1000 - frames[0].t;
     this.playing = true;
     // intro: the being fades in WITH the form's light stepping back
@@ -143,6 +207,7 @@ export const ghost = {
       if (i === -1) {
         if (--this._loops > 0) {
           this._t0 = performance.now() / 1000 - fr[0].t;
+          this._resetSheet();
           this._raf = requestAnimationFrame(tick);
           return;
         }
@@ -157,17 +222,46 @@ export const ghost = {
       const life = Math.min(1, (t - fr[0].t) / 0.5,
         (fr[fr.length - 1].t - t) / 0.5 + 0.001);
       const n = Math.min(a.hands.length, b.hands.length);
+      let first = null;
       for (let h = 0; h < n; h++) {
         const lm = a.hands[h].map((p, j) => [
           p[0] + (b.hands[h][j][0] - p[0]) * k,
           p[1] + (b.hands[h][j][1] - p[1]) * k,
-          0,
+          p[2] + (b.hands[h][j][2] - p[2]) * k,
         ]);
+        if (!first) first = lm;
         this.drawHand(lm, Math.max(0, life));
       }
+      if (this._follow && first) this._followSheet(first);
       this._raf = requestAnimationFrame(tick);
     };
     this._raf = requestAnimationFrame(tick);
+  },
+
+  // the demonstration's whole point (the owner, 12.07): the mock sheet
+  // BEHAVES — while the ghost pinches, the sheet rides its hand exactly
+  // the way a chapter rides a real pinch. Pinch is read off the clip
+  // with the same geometry hands.js uses, hysteresis 0.30/0.45.
+  _followSheet(lm) {
+    const d = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]);
+    const pinch = d(lm[4], lm[8]) / Math.max(1e-4, d(lm[0], lm[9]));
+    const handY = (lm[4][1] + lm[8][1]) / 2;
+    const sh = this._sheet;
+    if (!sh.grab && pinch < 0.30) sh.grab = { y0: handY, s0: sh.y };
+    else if (sh.grab && pinch > 0.45) sh.grab = null;
+    if (!sh.grab) return;
+    const dy = (handY - sh.grab.y0) * this._gain * innerHeight;
+    sh.y = Math.max(-innerHeight * 0.35,
+      Math.min(innerHeight * 0.35, sh.grab.s0 + dy));
+    this.mock.style.transition = 'opacity 0.7s, transform 0s';
+    this.mock.style.transform = `translateY(calc(-50% + ${sh.y}px))`;
+  },
+
+  _resetSheet() {
+    this._sheet = { y: 0, grab: null };
+    if (!this.mock) return;
+    this.mock.style.transition = 'opacity 0.7s, transform 0.6s cubic-bezier(0.22, 0.61, 0.36, 1)';
+    this.mock.style.transform = 'translateY(-50%)';
   },
 
   // outro (and any interrupt): the hint leaves twice as fast as it came,
@@ -182,9 +276,11 @@ export const ghost = {
     if (quiet || !wasPlaying) {
       this.stage.classList.remove('on', 'mock-on', 'fast');
       if (this.ctx) this.ctx.clearRect(0, 0, innerWidth, innerHeight);
+      this._resetSheet();
       return;
     }
     if (this._dim) this._dim(false);
+    this._resetSheet();
     this.stage.classList.add('fast');
     this.stage.classList.remove('on', 'mock-on');
     const done = this._onend;
