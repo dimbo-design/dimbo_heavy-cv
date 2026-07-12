@@ -846,7 +846,11 @@ function localizeNodes() {
     const el = document.querySelector(`.node[data-id="${n.id}"]`);
     if (!el) continue;
     el.querySelector('.n-label').textContent = n.label[lang];
-    el.querySelector('.n-sub').textContent = n.sub[lang];
+    // the sub must hold, from birth, the very text focus will show —
+    // a different string means a different box, and the centering
+    // translate makes the whole node hop on the first hover
+    el.querySelector('.n-sub').textContent =
+      learned.open ? n.sub[lang] : UI.nodeHint[lang];
   }
 }
 

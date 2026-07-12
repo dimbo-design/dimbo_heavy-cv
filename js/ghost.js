@@ -567,12 +567,14 @@ export const ghost = {
     if (this._dim) this._dim(false);
     this._resetSheet();
     this.stage.classList.add('fast');
-    this.stage.classList.remove('on', 'mock-on', 'mock-right', 'lb-on');
+    // mock-right survives the outro — dropping it mid-fade snapped the
+    // skeleton to the left-chapter layout on the hint's last frame
+    this.stage.classList.remove('on', 'mock-on', 'lb-on');
     const done = this._onend;
     this._onend = null;
     setTimeout(() => {
       if (this.ctx) this.ctx.clearRect(0, 0, innerWidth, innerHeight);
-      this.stage.classList.remove('fast');
+      this.stage.classList.remove('fast', 'mock-right');
     }, 420);
     if (done) done();
   },
