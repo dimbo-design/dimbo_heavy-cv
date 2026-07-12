@@ -136,6 +136,15 @@ export const ghost = {
     if (sy1 - sy0 >= vh - 2 * m) this._off.y = (vh - sy0 - sy1) / 2;
     else if (sy0 < m) this._off.y = m - sy0;
     else if (sy1 > vh - m) this._off.y = vh - m - sy1;
+    // the veil is a STAGE, not a costume (the owner, 12.07): one still
+    // ellipse over ~60% of the screen around where the gesture plays,
+    // not a per-frame hug of the crop — the flesh lives fully lit
+    // inside it and dissolves only toward the stage's far edges
+    this._veil = {
+      cx: (sx0 + sx1) / 2 + this._off.x,
+      cy: (sy0 + sy1) / 2 + this._off.y,
+      hw: vw * 0.30, hh: vh * 0.34,
+    };
   },
 
   show({ mock = false } = {}) {
@@ -187,12 +196,13 @@ export const ghost = {
     const ys = [sy(fa.y), sy(fa.y + fa.h / fa.fh), sy(fb.y), sy(fb.y + fb.h / fb.fh)];
     const bx0 = Math.max(0, Math.min(...xs)), bx1 = Math.min(vw, Math.max(...xs));
     const by0 = Math.max(0, Math.min(...ys)), by1 = Math.min(vh, Math.max(...ys));
-    // radial breath around the gesture (the owner, 12.07): the crop
-    // rectangle must never read as a frame — flesh dissolves into
-    // transparency away from the gesture's own center. Elliptical, so
-    // the fade reaches the near sides of tall or wide crops too
-    const rcx = (bx0 + bx1) / 2, rcy = (by0 + by1) / 2;
-    const rhw = Math.max(1, (bx1 - bx0) / 2), rhh = Math.max(1, (by1 - by0) / 2);
+    // the stage veil (computed in _refit from the whole clip) — a
+    // fallback to the pair bbox only if a clip somehow has no veil
+    const veil = this._veil;
+    const rcx = veil ? veil.cx : (bx0 + bx1) / 2;
+    const rcy = veil ? veil.cy : (by0 + by1) / 2;
+    const rhw = veil ? veil.hw : Math.max(1, (bx1 - bx0) / 2);
+    const rhh = veil ? veil.hh : Math.max(1, (by1 - by0) / 2);
     // the accent glow rides the nearest point of the ahead frame,
     // lerped — one coherent bluish breath, not per-dot speckle (depth
     // noise at hand scale would shimmer)
