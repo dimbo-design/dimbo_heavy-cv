@@ -118,7 +118,12 @@ export const ghost = {
     }
     // background/body cutoff, adaptive to the clip's own depth range —
     // the hand is the closest thing in the crop
-    const cut = Math.min(fa._max, fb._max) / 255 * 0.58;
+    const mx = Math.min(fa._max, fb._max) / 255;
+    const cut = mx * 0.58;
+    // the palette is relative, like the form's: whatever survives the
+    // cut spans the full range, so the nearest flesh always reaches
+    // the amber band (recordings sit in arbitrary absolute depths)
+    const span = Math.max(0.05, mx - cut);
     const sample = (f, cx, cy) => {
       const u = (cx - f.x) * f.fw, v = (cy - f.y) * f.fh;
       if (u < 0 || v < 0 || u >= f.w - 1 || v >= f.h - 1) return 0;
@@ -144,14 +149,15 @@ export const ghost = {
         const va = sample(fa, cx, cy);
         const vD = va + (sample(fb, cx, cy) - va) * k;
         if (vD < cut) continue;
+        const vN = Math.min(1, (vD - cut) / span);
         // the shader's own light: lum by proximity, exposure kept on
         // the near flesh (scene.js FRAG, same curves)
-        const lum = (0.16 + 0.69 * vD) * (0.30 + 0.70 * ss(0.06, 0.45, vD));
+        const lum = (0.16 + 0.69 * vN) * (0.30 + 0.70 * ss(0.06, 0.45, vN));
         const jx = Math.sin((x * 7 + y) * 12.9898) * 1.4;
         const jy = Math.cos((x + y * 11) * 78.233) * 1.4;
         g.beginPath();
-        g.arc(x + jx, y + jy, 1.1 + vD * 1.2, 0, TAU);
-        g.fillStyle = `rgba(${tint(vD)}, ${Math.min(1, lum * 1.35) * life})`;
+        g.arc(x + jx, y + jy, 1.1 + vN * 1.2, 0, TAU);
+        g.fillStyle = `rgba(${tint(vN)}, ${Math.min(1, lum * 1.35) * life})`;
         g.fill();
       }
     }
@@ -255,20 +261,25 @@ export const ghost = {
     // judged once, over the recorded frames, with the detector's own
     // sternness: two frames to engage, two to release
     this._grabs = opts.follow ? this._judgeGrabs(frames) : null;
-    this._t0 = performance.now() / 1000 - frames[0].t;
+    this._t0 = performance.now() / 1000;
     this.playing = true;
     // intro: the being fades in WITH the form's light stepping back
     this.show({ mock: !!opts.mock });
     if (this._dim) this._dim(true);
     this._fit();
+    // the fades live OUTSIDE the demonstration (the owner, 12.07): the
+    // being arrives holding its first pose, plays the gesture at full
+    // presence, and leaves holding the last — the word itself is never
+    // half-transparent
+    const INTRO = 0.45, OUTRO = 0.35;
     const tick = () => {
       if (!this.playing) return;
-      const t = performance.now() / 1000 - this._t0;
       const fr = this._frames;
-      let i = fr.findIndex((f) => f.t > t);
-      if (i === -1) {
+      const dur = fr[fr.length - 1].t - fr[0].t;
+      const el = performance.now() / 1000 - this._t0;
+      if (el >= INTRO + dur + OUTRO) {
         if (--this._loops > 0) {
-          this._t0 = performance.now() / 1000 - fr[0].t;
+          this._t0 = performance.now() / 1000;
           this._resetSheet();
           this._raf = requestAnimationFrame(tick);
           return;
@@ -276,11 +287,13 @@ export const ghost = {
         this.stop();
         return;
       }
+      const life = el < INTRO ? ss(0, 1, el / INTRO)
+        : el > INTRO + dur ? ss(0, 1, 1 - (el - INTRO - dur) / OUTRO) : 1;
+      const t = fr[0].t + Math.min(dur, Math.max(0, el - INTRO));
+      let i = fr.findIndex((f) => f.t > t);
+      if (i === -1) i = fr.length - 1;
       if (i === 0) i = 1;
       this.ctx.clearRect(0, 0, innerWidth, innerHeight);
-      // ease in and out of the clip so the being appears, not pops
-      const life = Math.max(0, Math.min(1, (t - fr[0].t) / 0.5,
-        (fr[fr.length - 1].t - t) / 0.5 + 0.001));
       if (this._depth) {
         // the real flesh: find the surrounding depth frames by time
         const dp = this._depth;
