@@ -125,6 +125,8 @@ function summarize(lm) {
     pinchPoint: { x: (lm[4].x + lm[8].x) / 2, y: (lm[4].y + lm[8].y) / 2 },
     size, pinch, open, sign,
     pointing: idxExt > 1.15 && midExt < 1.0,
+    raw: lm,   // full skeleton, a reference not a copy: the ghost recorder
+               // (⌥G) serializes it; nothing else may depend on it
   };
 }
 

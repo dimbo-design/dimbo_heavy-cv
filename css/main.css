@@ -700,9 +700,57 @@ body.is-mobile.space-open .corner.tr {
 body.glyph-on #ghint { opacity: 0; }
 .is-mobile #ghint { display: none !important; }
 
+/* ── ghost teacher ──────────────────────────────────────────────
+   the owner's recorded hand replayed as a separate being: the
+   counter-color against the site's amber (the cinema teal-orange
+   split — cold reads as "not you"). Above the chapter sheet (35),
+   below the visitor's own cursor (80). Dormant until wired. */
+
+:root { --ghost-rgb: 93, 159, 217; }
+
+#ghost-stage {
+  position: fixed; inset: 0; z-index: 55; pointer-events: none;
+  opacity: 0; transition: opacity 0.7s;
+}
+#ghost-stage.on { opacity: 1; }
+#ghost-hand { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+/* the mock sheet: a chapter's see-through skeleton — kicker, title,
+   text lines, a photo strip. Enough body to demonstrate scroll and
+   the fist on, honest enough to never be read as real content. */
+#ghost-mock {
+  position: absolute; top: 50%; left: 8vw; width: min(560px, 44vw);
+  transform: translateY(-50%);
+  opacity: 0; transition: opacity 0.7s;
+}
+#ghost-stage.mock-on #ghost-mock { opacity: 1; }
+#ghost-mock i { display: block; border-radius: 2px; }
+#ghost-mock .gm-kicker {
+  width: 92px; height: 9px; margin-bottom: 24px;
+  background: rgba(var(--ghost-rgb), 0.30);
+}
+#ghost-mock .gm-title {
+  width: 72%; height: 28px; margin-bottom: 30px;
+  background: rgba(var(--ghost-rgb), 0.20);
+}
+#ghost-mock .gm-line {
+  width: 100%; height: 11px; margin-bottom: 15px;
+  background: rgba(var(--ghost-rgb), 0.11);
+}
+#ghost-mock .gm-line.w60 { width: 60%; }
+#ghost-mock .gm-line.w80 { width: 80%; }
+#ghost-mock .gm-strip { display: flex; gap: 14px; margin: 28px 0; }
+#ghost-mock .gm-strip i {
+  flex: 1; aspect-ratio: 4 / 3;
+  background: rgba(var(--ghost-rgb), 0.08);
+  border: 1px solid rgba(var(--ghost-rgb), 0.28);
+}
+.is-mobile #ghost-stage { display: none !important; }
+
 /* ?zero — the photo booth: nothing but the particle form on stage.
    The vignette and grain stay: they are the fabric of the frame, not UI. */
 body.zero .corner, body.zero #identity, body.zero #nodes, body.zero #ghint,
-body.zero #cursor, body.zero #scroll-hint, body.zero #invite-s2 {
+body.zero #cursor, body.zero #scroll-hint, body.zero #invite-s2,
+body.zero #ghost-stage {
   display: none !important;
 }

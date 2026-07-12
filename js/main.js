@@ -15,6 +15,7 @@ import { DepthEngine } from './depth.js';
 import { HandsEngine } from './hands.js';
 import { PoseEngine } from './pose.js';
 import { Gestures } from './gestures.js';
+import { ghost } from './ghost.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -189,6 +190,7 @@ const app = {
   glog: [],                 // last recognized gesture events (debug)
   glogFull: [],             // whole-session log, copyable from the panel
   rec: null,                // raw hand trace (⌥R): fuel for the finger workshop
+  grec: null, grecOn: false,   // fat trace (⌥G): full skeletons for the ghost teacher
   hoverDl: null,            // a[data-dl] under the hand cursor
   focusChangedAt: 0,
   device: null,
@@ -282,7 +284,10 @@ function boot() {
   const pose = new PoseEngine();
   const gestures = new Gestures();
   const signals = new Signals(CONFIG.presence);
-  Object.assign(app, { field, engine, hands, pose, gestures, signals });
+  // NB: app.ghost is TAKEN — it's the fabric-glow ambient's state. The
+  // teacher (the recorded-hand being) lives under its own name.
+  Object.assign(app, { field, engine, hands, pose, gestures, signals, teacher: ghost });
+  ghost.mount();   // the stage exists from day one; the being waits for clips
 
   for (const n of NODES) field.addAnchor(n.id, n.anchor);
   buildNodes();
@@ -435,6 +440,19 @@ function boot() {
       app.rec.push(`${(performance.now() / 1000).toFixed(2)} ${h.pinch.toFixed(2)} ${h.open.toFixed(2)} ${h.size.toFixed(3)} ${h.palm.x.toFixed(3)} ${h.palm.y.toFixed(3)} ${h.index.x.toFixed(3)} ${h.index.y.toFixed(3)} ${h.wrist ? `${h.wrist.x.toFixed(3)} ${h.wrist.y.toFixed(3)}` : '- -'}`);
       if (app.rec.length > 1400) app.rec.shift();
     }
+    if (app.grecOn && e.detail.hands.length) {
+      // the fat trace: full 21-point skeletons of EVERY hand in frame —
+      // the ghost teacher is drawn from these clips. All hands by design
+      // (the owner's own caution against a truncated format: record one
+      // hand by keeping one hand in frame, not by a format that can't
+      // hold two). ~45s cap keeps the clipboard sane.
+      app.grec.push({
+        t: +(performance.now() / 1000).toFixed(3),
+        hands: e.detail.hands.filter((hh) => hh?.raw).map((hh) =>
+          hh.raw.map((p) => [+p.x.toFixed(4), +p.y.toFixed(4), +(p.z || 0).toFixed(4)])),
+      });
+      if (app.grec.length > 900) app.grec.shift();
+    }
   });
 
   const gctx = () => app.lb ? 'lightbox' : app.spaceId ? 'chapter:' + app.spaceId : app.state;
@@ -537,6 +555,7 @@ function boot() {
     if (e.code === 'KeyD' && (e.altKey || e.ctrlKey)) cycleDebug();
     if (e.code === 'KeyC' && e.altKey) copyLog();
     if (e.code === 'KeyR' && e.altKey) toggleRec();
+    if (e.code === 'KeyG' && e.altKey) toggleGRec();
     if (e.code === 'KeyT' && e.altKey) copyRec();
   });
   document.addEventListener('click', (e) => {
@@ -1875,6 +1894,18 @@ function toggleRec() {
   if (b) b.textContent = app.recOn ? 'rec ● пишет' : (app.rec?.length ? 'rec ✓ · ⌥T' : 'rec (⌥R)');
 }
 
+function toggleGRec() {
+  // same contract as ⌥R: stop keeps the buffer, a new start wipes it
+  if (app.grecOn) {
+    app.grecOn = false;
+  } else {
+    app.grec = [];
+    app.grecOn = true;
+  }
+  const b = $('debug-grec');
+  if (b) b.textContent = app.grecOn ? 'rec+ ● пишет' : (app.grec?.length ? 'rec+ ✓ · ⌥T' : 'rec+ (⌥G)');
+}
+
 function logHead() {
   const s = app.signals, g = app.gestures;
   return [
@@ -1921,7 +1952,10 @@ function copyRec() {
   const trace = app.rec && app.rec.length
     ? ['--- trace: t pinch open size palmX palmY indexX indexY wristX wristY', ...app.rec]
     : ['--- trace: пусто (⌥R, движение, ⌥R)'];
-  copyText(logHead().concat(trace).join('\n'), 'debug-copyrec', 'copy rec (⌥T)');
+  const ghost = app.grec && app.grec.length
+    ? ['--- ghost: полные скелеты, JSON [{t, hands: [[[x,y,z]×21]…]}]', JSON.stringify(app.grec)]
+    : [];
+  copyText(logHead().concat(trace, ghost).join('\n'), 'debug-copyrec', 'copy rec (⌥T)');
 }
 
 function renderDebug() {
@@ -1942,11 +1976,15 @@ function renderDebug() {
     rec.id = 'debug-rec';
     rec.textContent = 'rec (⌥R)';
     rec.addEventListener('click', toggleRec);
+    const grec = document.createElement('button');
+    grec.id = 'debug-grec';
+    grec.textContent = 'rec+ (⌥G)';
+    grec.addEventListener('click', toggleGRec);
     const cr = document.createElement('button');
     cr.id = 'debug-copyrec';
     cr.textContent = 'copy rec (⌥T)';
     cr.addEventListener('click', copyRec);
-    tools.append(mode, b, rec, cr);
+    tools.append(mode, b, rec, grec, cr);
     el.before(tools);
     // the copy button deliberately outlives the panel — the log is most
     // wanted right after you've hidden the numbers
