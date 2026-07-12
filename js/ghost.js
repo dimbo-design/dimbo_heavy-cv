@@ -100,21 +100,30 @@ export const ghost = {
     this._refit();
   },
 
-  // the being plays where it was recorded — but never off the stage:
-  // the smallest shift that keeps the whole gesture inside the
-  // viewport (the raised gain would otherwise clip fingers at edges)
+  // the being plays where it was recorded — but never off the stage
+  // and NEVER over the content (the owner's law, broken once by this
+  // very fit and repaired: the content-side bound always wins, any
+  // excess overflows toward the far edge where the veil dissolves it)
   _refit() {
     const bb = this._bb;
     this._off = { x: 0, y: 0 };
     if (!bb) return;
-    const g = this._gain, vw = innerWidth, vh = innerHeight, m = 30;
+    const g = this._gain, vw = innerWidth, vh = innerHeight, m = 24;
     const sx0 = ((1 - bb.x1) - 0.5) * g * vw + vw / 2;
     const sx1 = ((1 - bb.x0) - 0.5) * g * vw + vw / 2;
     const sy0 = (bb.y0 - 0.5) * g * vh + vh / 2;
     const sy1 = (bb.y1 - 0.5) * g * vh + vh / 2;
-    if (sx1 - sx0 >= vw - 2 * m) this._off.x = (vw - sx0 - sx1) / 2;
-    else if (sx0 < m) this._off.x = m - sx0;
-    else if (sx1 > vw - m) this._off.x = vw - m - sx1;
+    if (this._side === 'right') {
+      // content on the right — the being lives left of it
+      const x1 = vw * 0.46;
+      if (sx0 < m) this._off.x = m - sx0;
+      if (sx1 + this._off.x > x1) this._off.x = x1 - sx1;
+    } else {
+      // content on the left (chapters and the mock sheet alike)
+      const x0 = vw * 0.54;
+      if (sx1 > vw - m) this._off.x = vw - m - sx1;
+      if (sx0 + this._off.x < x0) this._off.x = x0 - sx0;
+    }
     if (sy1 - sy0 >= vh - 2 * m) this._off.y = (vh - sy0 - sy1) / 2;
     else if (sy0 < m) this._off.y = m - sy0;
     else if (sy1 > vh - m) this._off.y = vh - m - sy1;
@@ -322,6 +331,7 @@ export const ghost = {
     // a photo (strip cell swells into a frame), carries it through the
     // stack, and the opening palm lets it collapse back.
     this._act = opts.act || null;
+    this._side = opts.side || 'left';
     this._grabs = this._act === 'sheet' ? this._judgeGrabs(frames) : null;
     this._fists = this._act === 'gallery' ? this._judgeFists(frames) : null;
     this._t0 = performance.now() / 1000;

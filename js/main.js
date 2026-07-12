@@ -305,8 +305,12 @@ function boot() {
         // gain over the cursor's: the demonstration owns the screen,
         // its edges dissolved by the radial fade (the owner, 12.07)
         ghost.play(frames, {
-          gain: gestures.gain * 1.45, loops: 3, mock: true,
-          dim: (on) => field.setTeachDim(on),
+          gain: gestures.gain * 1.45 * (clip === 'photo' ? 0.9 : 1),
+          loops: 3, mock: true,
+          dim: (on) => {
+            field.setTeachDim(on);
+            document.body.classList.toggle('teaching', on);
+          },
           act: clip === 'scroll' ? 'sheet' : 'gallery',
         });
       } catch { /* unknown clip name — the stage stays dark */ }
@@ -316,10 +320,11 @@ function boot() {
   // ---- the being's real life (the owner's spec, 12.07). Born on
   // stalling: a live hand in a chapter whose content stands still.
   // Learned in order — the photo lesson waits until scrolling is
-  // learned. Dies on the first real success (localStorage, ?fresh
-  // forgets). Each hint repeats every 45s until learned; after any
-  // demonstration the OTHER one holds 10s of silence — cooldowns
-  // never stack. ?teacher keeps the stage for look-validation only.
+  // learned, and only speaks over a photo actually on screen. Dies on
+  // the first real success (localStorage, ?fresh forgets). Each hint
+  // repeats every 45s until learned; after any demonstration the
+  // OTHER one holds 35s of silence — cooldowns never stack. ?teacher
+  // keeps the stage for look-validation only.
   const teach = app.teach = {
     scrollDead: !!localStorage.getItem('gl_teach_scroll'),
     photoDead: !!localStorage.getItem('gl_teach_photo'),
@@ -362,14 +367,21 @@ function boot() {
         teach.stillAt = now;
       }
       if (!inChapter || !hand || app.scroll.max <= 0) teach.stillAt = now;
-      if (!inChapter || !hand
-        || !document.querySelector('#space-inner .strip figure')) teach.calmAt = now;
-      if (now - teach.lastEndAt < 10000) return;
+      if (!inChapter || !hand || !stripImageOnScreen()) teach.calmAt = now;
+      if (now - teach.lastEndAt < 35000) return;
       if (!teach.scrollDead && now > teach.scrollNextAt
         && now - teach.stillAt > 6000) { teachPlay('scroll'); return; }
       if (teach.scrollDead && !teach.photoDead && now > teach.photoNextAt
         && now - teach.calmAt > 8000) teachPlay('photo');
     }, 500);
+  }
+  // the lesson only makes sense over a photo the visitor can see
+  function stripImageOnScreen() {
+    for (const f of document.querySelectorAll('#space-inner .strip figure')) {
+      const r = f.getBoundingClientRect();
+      if (r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth) return true;
+    }
+    return false;
   }
   async function teachPlay(name) {
     teach[`${name}NextAt`] = performance.now() + 45000;
@@ -378,9 +390,14 @@ function boot() {
       const frames = (app._teachClips[name] ??= await ghost.load(name));
       if (!app.cameraOn || ghost.playing || app.lb || !app.spaceId) return;
       ghost.play(frames, {
-        gain: gestures.gain * 1.45, loops: 2, mock: true,
-        dim: (on) => field.setTeachDim(on),
+        gain: gestures.gain * 1.45 * (name === 'photo' ? 0.9 : 1),
+        loops: 2, mock: true,
+        dim: (on) => {
+          field.setTeachDim(on);
+          document.body.classList.toggle('teaching', on);
+        },
         act: name === 'scroll' ? 'sheet' : 'gallery',
+        side: document.body.classList.contains('space-right') ? 'right' : 'left',
         onend: () => { teach.lastEndAt = performance.now(); },
       });
     } catch { /* clip missing — the being stays unborn */ }
@@ -905,6 +922,8 @@ function positionCloseCross() {
 function closeSpace() {
   if (!app.spaceId) return;
   app.spaceId = null;
+  // the lesson's stage is the chapter — no chapter, no lesson
+  if (app.teacher?.playing) app.teacher.stop();
   if (app.signals) {
     app.signals.panelOpen = false;
     app.signals.lastLeanEnd = performance.now();

@@ -712,6 +712,11 @@ body.glyph-on #ghint { opacity: 0; }
   position: fixed; inset: 0; z-index: 55; pointer-events: none;
   opacity: 0; transition: opacity 0.7s;
 }
+/* while the being teaches, the real chapter steps into shadow — the
+   mock skeleton must read ABOVE the content, not tangled with it
+   (the owner, 12.07); the form dims the same way (setTeachDim) */
+#space { transition: opacity 0.7s; }
+body.teaching #space { opacity: 0.12; }
 #ghost-stage.on { opacity: 1; }
 /* the outro leaves twice as fast as the intro came (the owner's timing) */
 #ghost-stage.fast { transition: opacity 0.35s; }
