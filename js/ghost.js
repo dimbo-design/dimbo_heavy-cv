@@ -136,6 +136,10 @@ export const ghost = {
     if (sy1 - sy0 >= vh - 2 * m) this._off.y = (vh - sy0 - sy1) / 2;
     else if (sy0 < m) this._off.y = m - sy0;
     else if (sy1 > vh - m) this._off.y = vh - m - sy1;
+    // the veil's gradient center sits on the right edge of the
+    // overlay that holds the gesture (the owner's spec): for a clip
+    // playing at the screen's edge that IS the screen's right edge
+    this._veilX = Math.min(vw, Math.max(vw * 0.6, sx1 + this._off.x));
   },
 
   show({ mock = false } = {}) {
@@ -187,10 +191,12 @@ export const ghost = {
     const ys = [sy(fa.y), sy(fa.y + fa.h / fa.fh), sy(fb.y), sy(fb.y + fb.h / fb.fh)];
     const bx0 = Math.max(0, Math.min(...xs)), bx1 = Math.min(vw, Math.max(...xs));
     const by0 = Math.max(0, Math.min(...ys)), by1 = Math.min(vh, Math.max(...ys));
-    // the veil melts ONLY the data's own borders (the owner, 12.07:
-    // no prism circle, no mathematical clipping — the flesh stays
-    // whole, and the crop's rectangle still never reads as a frame)
-    const melt = Math.max(8, Math.min(bx1 - bx0, by1 - by0) * 0.16);
+    // the veil, the owner's spec (12.07): a radial opacity gradient
+    // 78%→0, diameter 110% of the screen width, centered mid-height
+    // on the right edge of the gesture's overlay — the gesture lives
+    // in its light and dissolves toward the content side. No
+    // crop-hugging, ever: the design is his, the code obeys.
+    const vR = vw * 0.55, vox = this._veilX ?? vw, voy = vh / 2;
     // the accent glow rides the nearest point of the ahead frame,
     // lerped — one coherent bluish breath, not per-dot speckle (depth
     // noise at hand scale would shimmer)
@@ -207,10 +213,7 @@ export const ghost = {
         const va = sample(fa, cx, cy);
         const vD = va + (sample(fb, cx, cy) - va) * k;
         if (vD < cut) continue;
-        // more ghost than flesh: 76% everywhere, dissolving only at
-        // the data's borders
-        const fade = 0.76 * ss(0, melt,
-          Math.min(x - bx0, bx1 - x, y - by0, by1 - y));
+        const fade = 0.78 * Math.max(0, 1 - Math.hypot(x - vox, y - voy) / vR);
         if (fade < 0.02) continue;
         const vN = Math.min(1, (vD - cut) / span);
         const band = (1 - ss(gR * 0.25, gR, Math.hypot(x - gx, y - gy))) * 0.6;

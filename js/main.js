@@ -304,11 +304,11 @@ function boot() {
         // NOT sit over the content, same as a real right-hand reach)
         // gain over the cursor's: the demonstration owns the screen,
         // its edges dissolved by the radial fade (the owner, 12.07)
-        // the pinch plays at the recording's own scale and place (the
-        // owner, 12.07: the blowup read as distortion — «не как я
-        // записывал»); the photo keeps its tuned −10% of the wide gain
+        // both clips play at the recording's own scale and place (the
+        // owner, 12.07: any blowup reads as distortion — «не как я
+        // записывал»)
         ghost.play(frames, {
-          gain: gestures.gain * (clip === 'photo' ? 1.45 * 0.9 : 1),
+          gain: gestures.gain,
           loops: 3, mock: true,
           dim: (on) => {
             field.setTeachDim(on);
@@ -396,7 +396,7 @@ function boot() {
       const frames = (app._teachClips[name] ??= await ghost.load(name));
       if (!app.cameraOn || ghost.playing || app.lb || !app.spaceId) return;
       ghost.play(frames, {
-        gain: gestures.gain * (name === 'photo' ? 1.45 * 0.9 : 1),
+        gain: gestures.gain,
         loops: 2, mock: true,
         dim: (on) => {
           field.setTeachDim(on);
