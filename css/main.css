@@ -240,6 +240,23 @@ body.glyph-on #nodes { opacity: 0; }
 .node.focus .n-label { border-bottom-color: rgba(232, 228, 218, 0.55); letter-spacing: 0.22em; }
 .node.focus .n-sub { opacity: 1; transform: none; }
 
+/* the mouse gets a real hover — the same presence the hand focus has,
+   minus the dwell bar (a click is instant, nothing fills). Both sub
+   texts share one grid cell so the node's box never changes: the
+   mouse reads the chapter's description, the hand reads the teaching
+   hint until the first learned open (body.gl-open). */
+.node .n-sub { display: grid; }
+.node .n-sub > span { grid-area: 1 / 1; visibility: hidden; }
+.node:hover { opacity: 1; }
+.node:hover .n-label { border-bottom-color: rgba(232, 228, 218, 0.55); letter-spacing: 0.22em; }
+.node:hover::before { opacity: 1.6; }
+.node:hover .n-sub { opacity: 1; transform: none; }
+.node:hover .n-sub > .s-d { visibility: visible; }
+.node.focus .n-sub > .s-d { visibility: visible; }
+body:not(.gl-open) .node.focus .n-sub > .s-h { visibility: visible; }
+body:not(.gl-open) .node.focus .n-sub > .s-d { visibility: hidden; }
+.is-mobile .node .n-sub > .s-d { visibility: visible; }
+
 body.space-open .node { opacity: 0 !important; pointer-events: none; }
 body.space-open #identity { opacity: 0.1; }
 

@@ -42,6 +42,8 @@ if (new URLSearchParams(location.search).has('fresh')) {
 const learned = {
   open: !!localStorage.getItem('gl_open'),
 };
+// CSS decides which sub-text a focused node shows by this class
+document.body.classList.toggle('gl-open', learned.open);
 const returning = !!localStorage.getItem('visited') &&
   !new URLSearchParams(location.search).has('fresh');
 try { localStorage.setItem('visited', '1'); } catch (_) { /* private mode */ }
@@ -834,7 +836,7 @@ function buildNodes() {
     const el = document.createElement('button');
     el.className = 'node';
     el.dataset.id = n.id;
-    el.innerHTML = `<span class="n-label"></span><i class="n-bar"><i class="n-fill"></i></i><span class="n-sub"></span>`;
+    el.innerHTML = `<span class="n-label"></span><i class="n-bar"><i class="n-fill"></i></i><span class="n-sub"><span class="s-h"></span><span class="s-d"></span></span>`;
     el.addEventListener('click', () => openSpace(n.id));
     wrap.appendChild(el);
   }
@@ -846,11 +848,13 @@ function localizeNodes() {
     const el = document.querySelector(`.node[data-id="${n.id}"]`);
     if (!el) continue;
     el.querySelector('.n-label').textContent = n.label[lang];
-    // the sub must hold, from birth, the very text focus will show —
-    // a different string means a different box, and the centering
-    // translate makes the whole node hop on the first hover
-    el.querySelector('.n-sub').textContent =
-      learned.open ? n.sub[lang] : UI.nodeHint[lang];
+    // both sub texts live in one grid cell from birth — the box is
+    // always as wide as the wider one, so neither the mouse hover nor
+    // the hand focus can ever change the node's geometry. CSS picks
+    // which to show: the mouse gets the description, the hand gets
+    // the teaching hint until the first learned open (body.gl-open)
+    el.querySelector('.n-sub .s-h').textContent = UI.nodeHint[lang];
+    el.querySelector('.n-sub .s-d').textContent = n.sub[lang];
   }
 }
 
@@ -1658,13 +1662,7 @@ function updateNodes(focusX, handActive, focusable = true) {
     app.focusChangedAt = performance.now();
     app.hold.p = 0;
     for (const el of document.querySelectorAll('.node')) {
-      const isBest = el.dataset.id === best;
-      el.classList.toggle('focus', isBest);
-      if (isBest && handActive) {
-        const n = NODES.find((x) => x.id === best);
-        el.querySelector('.n-sub').textContent =
-          learned.open ? n.sub[lang] : UI.nodeHint[lang];
-      }
+      el.classList.toggle('focus', el.dataset.id === best);
     }
   }
 }
@@ -1711,7 +1709,7 @@ function updateHold(dt, now) {
         if (!learned.open) {
           learned.open = true;
           try { localStorage.setItem('gl_open', '1'); } catch (_) {}
-          localizeNodes();
+          document.body.classList.add('gl-open');
         }
         openSpace(target.slice(5));
       }
