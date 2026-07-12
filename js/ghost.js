@@ -100,10 +100,14 @@ export const ghost = {
     this._refit();
   },
 
-  // the being plays where it was recorded — but never off the stage
-  // and NEVER over the content (the owner's law, broken once by this
-  // very fit and repaired: the content-side bound always wins, any
-  // excess overflows toward the far edge where the veil dissolves it)
+  // the being plays where it was recorded — but never off the stage:
+  // the smallest shift that keeps the gesture inside the viewport.
+  // The demonstration is self-contained (the owner, 12.07): the
+  // chapter behind it is in shadow and its content is IRRELEVANT to
+  // placement — the only composition is the stage's own. A clip may
+  // carry minX (fraction of vw): the scroll lesson stays right of its
+  // own mock sheet, and that bound wins over the viewport, the excess
+  // dissolving under the veil at the far edge.
   _refit() {
     const bb = this._bb;
     this._off = { x: 0, y: 0 };
@@ -113,16 +117,16 @@ export const ghost = {
     const sx1 = ((1 - bb.x0) - 0.5) * g * vw + vw / 2;
     const sy0 = (bb.y0 - 0.5) * g * vh + vh / 2;
     const sy1 = (bb.y1 - 0.5) * g * vh + vh / 2;
-    if (this._side === 'right') {
-      // content on the right — the being lives left of it
-      const x1 = vw * 0.46;
-      if (sx0 < m) this._off.x = m - sx0;
-      if (sx1 + this._off.x > x1) this._off.x = x1 - sx1;
-    } else {
-      // content on the left (chapters and the mock sheet alike)
-      const x0 = vw * 0.54;
+    if (this._minX != null) {
+      const x0 = vw * this._minX;
       if (sx1 > vw - m) this._off.x = vw - m - sx1;
       if (sx0 + this._off.x < x0) this._off.x = x0 - sx0;
+    } else if (sx1 - sx0 >= vw - 2 * m) {
+      this._off.x = (vw - sx0 - sx1) / 2;
+    } else if (sx0 < m) {
+      this._off.x = m - sx0;
+    } else if (sx1 > vw - m) {
+      this._off.x = vw - m - sx1;
     }
     if (sy1 - sy0 >= vh - 2 * m) this._off.y = (vh - sy0 - sy1) / 2;
     else if (sy0 < m) this._off.y = m - sy0;
@@ -331,7 +335,7 @@ export const ghost = {
     // a photo (strip cell swells into a frame), carries it through the
     // stack, and the opening palm lets it collapse back.
     this._act = opts.act || null;
-    this._side = opts.side || 'left';
+    this._minX = opts.minX ?? null;
     this._grabs = this._act === 'sheet' ? this._judgeGrabs(frames) : null;
     this._fists = this._act === 'gallery' ? this._judgeFists(frames) : null;
     this._t0 = performance.now() / 1000;

@@ -312,6 +312,9 @@ function boot() {
             document.body.classList.toggle('teaching', on);
           },
           act: clip === 'scroll' ? 'sheet' : 'gallery',
+          // only the scroll lesson is bound beside its mock — the photo
+          // clip plays exactly where it was recorded (the owner, 12.07)
+          minX: clip === 'scroll' ? 0.54 : null,
         });
       } catch { /* unknown clip name — the stage stays dark */ }
     }, 1800);
@@ -332,6 +335,9 @@ function boot() {
     stillAt: performance.now(), calmAt: performance.now(),
     lastScrollY: 0, acc: 0,
   };
+  // the lesson teaches the pinch — only the pinch counts as learned.
+  // Palm sweeps and finger snaps scroll too, but they are not this
+  // word (the owner, 12.07: не любой скролл жестом, только щипком)
   app.teachScrolled = (px) => {
     if (teach.scrollDead) return;
     teach.acc += Math.abs(px);
@@ -397,7 +403,7 @@ function boot() {
           document.body.classList.toggle('teaching', on);
         },
         act: name === 'scroll' ? 'sheet' : 'gallery',
-        side: document.body.classList.contains('space-right') ? 'right' : 'left',
+        minX: name === 'scroll' ? 0.54 : null,
         onend: () => { teach.lastEndAt = performance.now(); },
       });
     } catch { /* clip missing — the being stays unborn */ }
@@ -1215,9 +1221,7 @@ function onSwipe({ axis, dir, vx, pure }) {
     // palm coming home or an unclear wish, and neither may move the page.
     // Back = the finger snap or the pinch; home = a couple of pinch-flings.
     if (dir === 'up') {
-      const was = app.scroll.target;
       app.scroll.target = clamp(app.scroll.target + window.innerHeight * 0.6, 0, app.scroll.max);
-      app.teachScrolled?.(app.scroll.target - was);
     }
     return;
   }
@@ -1244,10 +1248,8 @@ function onFlick({ axis, dir, vel }) {
     if (!app.lb && app.spaceId) {
       const step = window.innerHeight * 0.52;
       if (app.scroll.target <= 4) app.scroll.over = 70;   // nothing above
-      const was = app.scroll.target;
       app.scroll.target = clamp(app.scroll.target - step, 0, app.scroll.max);
       app.scroll.vel = 0;
-      app.teachScrolled?.(app.scroll.target - was);
     }
     return;
   }
