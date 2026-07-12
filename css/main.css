@@ -776,16 +776,28 @@ body.teaching #space { opacity: 0.12; }
   opacity: 1;
   transform: scale(1);
 }
-#ghost-stage .gm-film {
-  position: absolute; inset: 0;
-  display: flex; gap: 16px;
-}
+/* the stack REPLACES photos, like the site's own gallery — cells lie
+   on top of each other and crossfade on each step of the carry; the
+   swap is deliberately ~2× lazier than the real one. Placeholders
+   differ in weight and caption so the replacement is visible. */
+#ghost-stage .gm-film { position: absolute; inset: 0; }
 #ghost-stage .gm-film i {
-  flex: none; width: 100%; height: 100%;
+  position: absolute; inset: 0; opacity: 0;
+  transition: opacity 0.5s;
   background: rgba(170, 191, 224, 0.07);
   border: 1px solid rgba(170, 191, 224, 0.18);
   border-radius: 2px;
 }
+#ghost-stage .gm-film i.cur { opacity: 1; }
+#ghost-stage .gm-film i:nth-child(2) { background: rgba(170, 191, 224, 0.12); }
+#ghost-stage .gm-film i:nth-child(3) { background: rgba(170, 191, 224, 0.04); }
+#ghost-stage .gm-film i::after {
+  content: ''; position: absolute; left: 26px; bottom: 22px; height: 8px;
+  background: rgba(170, 191, 224, 0.22); border-radius: 2px;
+}
+#ghost-stage .gm-film i:nth-child(1)::after { width: 120px; }
+#ghost-stage .gm-film i:nth-child(2)::after { width: 84px; }
+#ghost-stage .gm-film i:nth-child(3)::after { width: 156px; }
 .is-mobile #ghost-stage { display: none !important; }
 
 /* ?zero — the photo booth: nothing but the particle form on stage.

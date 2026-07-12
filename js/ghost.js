@@ -136,15 +136,6 @@ export const ghost = {
     if (sy1 - sy0 >= vh - 2 * m) this._off.y = (vh - sy0 - sy1) / 2;
     else if (sy0 < m) this._off.y = m - sy0;
     else if (sy1 > vh - m) this._off.y = vh - m - sy1;
-    // the veil is a STAGE, not a costume (the owner, 12.07): one still
-    // ellipse over ~60% of the screen around where the gesture plays,
-    // not a per-frame hug of the crop — the flesh lives fully lit
-    // inside it and dissolves only toward the stage's far edges
-    this._veil = {
-      cx: (sx0 + sx1) / 2 + this._off.x,
-      cy: (sy0 + sy1) / 2 + this._off.y,
-      hw: vw * 0.30, hh: vh * 0.34,
-    };
   },
 
   show({ mock = false } = {}) {
@@ -196,13 +187,10 @@ export const ghost = {
     const ys = [sy(fa.y), sy(fa.y + fa.h / fa.fh), sy(fb.y), sy(fb.y + fb.h / fb.fh)];
     const bx0 = Math.max(0, Math.min(...xs)), bx1 = Math.min(vw, Math.max(...xs));
     const by0 = Math.max(0, Math.min(...ys)), by1 = Math.min(vh, Math.max(...ys));
-    // the stage veil (computed in _refit from the whole clip) — a
-    // fallback to the pair bbox only if a clip somehow has no veil
-    const veil = this._veil;
-    const rcx = veil ? veil.cx : (bx0 + bx1) / 2;
-    const rcy = veil ? veil.cy : (by0 + by1) / 2;
-    const rhw = veil ? veil.hw : Math.max(1, (bx1 - bx0) / 2);
-    const rhh = veil ? veil.hh : Math.max(1, (by1 - by0) / 2);
+    // the veil melts ONLY the data's own borders (the owner, 12.07:
+    // no prism circle, no mathematical clipping — the flesh stays
+    // whole, and the crop's rectangle still never reads as a frame)
+    const melt = Math.max(8, Math.min(bx1 - bx0, by1 - by0) * 0.16);
     // the accent glow rides the nearest point of the ahead frame,
     // lerped — one coherent bluish breath, not per-dot speckle (depth
     // noise at hand scale would shimmer)
@@ -219,10 +207,10 @@ export const ghost = {
         const va = sample(fa, cx, cy);
         const vD = va + (sample(fb, cx, cy) - va) * k;
         if (vD < cut) continue;
-        // more ghost than flesh (the owner, 12.07): 76% at the heart of
-        // the gesture, dissolving to nothing at the edges
-        const fade = 0.76 * (1 - ss(0.55, 0.98,
-          Math.hypot((x - rcx) / rhw, (y - rcy) / rhh)));
+        // more ghost than flesh: 76% everywhere, dissolving only at
+        // the data's borders
+        const fade = 0.76 * ss(0, melt,
+          Math.min(x - bx0, bx1 - x, y - by0, by1 - y));
         if (fade < 0.02) continue;
         const vN = Math.min(1, (vD - cut) / span);
         const band = (1 - ss(gR * 0.25, gR, Math.hypot(x - gx, y - gy))) * 0.6;
@@ -341,7 +329,8 @@ export const ghost = {
     this._onend = opts.onend || null;
     this._dim = opts.dim || null;
     this._sheet = { y: 0, grab: null };
-    this._gal = { x: 0, grab: null, on: false };
+    // the stack opens on its middle photo — the carry can step either way
+    this._gal = { idx: 1, grab: null, on: false };
     // the mock moves ONLY while the word is actually engaged (the
     // owner, 12.07: no chasing an illusory hand) — grab/fist states are
     // judged once, over the recorded frames, with the detector's own
@@ -460,30 +449,44 @@ export const ghost = {
   },
 
   // the gallery act: clench — a strip cell swells into the big frame;
-  // the held fist carries the stack under it (the site's own fist
-  // slider); the opening palm collapses the frame back into the strip
+  // the held fist carries the stack under it. The real gallery
+  // REPLACES photos (the site's fist slider steps each ~150px of
+  // carry) — the lesson does the same, twice as lazy (the owner,
+  // 12.07: наглядно, but no false expectation of a slow site)
   _followGallery(fi) {
     const st = this._fists[fi];
     const gal = this._gal;
+    const film = this.stage ? this.stage.querySelector('.gm-film') : null;
+    if (!film) return;
     if (st.fist) {
       if (!gal.on) {
         gal.on = true;
         this.stage.classList.add('lb-on');
+        this._setFrame(film, gal.idx);
       }
-      if (!gal.grab) gal.grab = { x0: st.x, s0: gal.x };
-      const film = this.stage.querySelector('.gm-film');
-      const w = film ? film.clientWidth : 0;
-      // mirrored, weighted like the real slider — the stack follows
-      const dx = -(st.x - gal.grab.x0) * this._gain * innerWidth * 0.55;
-      gal.x = Math.max(-(2 * (w + 16)), Math.min(0, gal.grab.s0 + dx));
-      if (film) film.style.transform = `translateX(${gal.x}px)`;
+      if (!gal.grab) gal.grab = { x0: st.x, idx0: gal.idx };
+      const dx = -(st.x - gal.grab.x0) * this._gain * innerWidth;
+      const idx = Math.max(0, Math.min(2, gal.grab.idx0 + Math.trunc(dx / 300)));
+      if (idx !== gal.idx) {
+        gal.idx = idx;
+        this._setFrame(film, idx);
+      }
+      // the small nudge that says "the fist holds the stack"
+      const nudge = Math.max(-70, Math.min(70,
+        (dx - (idx - gal.grab.idx0) * 300) * 0.35));
+      film.style.transform = `translateX(${nudge}px)`;
     } else {
       gal.grab = null;
+      film.style.transform = 'translateX(0)';
       if (gal.on) {
         gal.on = false;
         this.stage.classList.remove('lb-on');
       }
     }
+  },
+
+  _setFrame(film, idx) {
+    film.querySelectorAll('i').forEach((el, i) => el.classList.toggle('cur', i === idx));
   },
 
   // the demonstration's whole point: the mock sheet BEHAVES — it stands
@@ -503,14 +506,17 @@ export const ghost = {
 
   _resetSheet() {
     this._sheet = { y: 0, grab: null };
-    this._gal = { x: 0, grab: null, on: false };
+    this._gal = { idx: 1, grab: null, on: false };
     if (!this.mock) return;
     this.mock.style.transition = 'opacity 0.7s, transform 0.6s cubic-bezier(0.22, 0.61, 0.36, 1)';
     this.mock.style.transform = 'translateY(-50%)';
     if (this.stage) {
       this.stage.classList.remove('lb-on');
       const film = this.stage.querySelector('.gm-film');
-      if (film) film.style.transform = 'translateX(0)';
+      if (film) {
+        film.style.transform = 'translateX(0)';
+        this._setFrame(film, 1);
+      }
     }
   },
 
