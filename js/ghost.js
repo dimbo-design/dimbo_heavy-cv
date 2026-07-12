@@ -118,8 +118,11 @@ export const ghost = {
     this._off = { x: 0, y: 0 };
     if (!bb) return;
     const g = this._gain, vw = innerWidth, vh = innerHeight, m = 24;
-    const sx0 = ((1 - bb.x1) - 0.5) * g * vw + vw / 2;
-    const sx1 = ((1 - bb.x0) - 0.5) * g * vw + vw / 2;
+    // the mirrored lesson (right-side chapters) flips the projection —
+    // the same recording, spoken with the other hand
+    const fx = (c) => (this._flip ? (c - 0.5) : ((1 - c) - 0.5)) * g * vw + vw / 2;
+    const sx0 = Math.min(fx(bb.x0), fx(bb.x1));
+    const sx1 = Math.max(fx(bb.x0), fx(bb.x1));
     const sy0 = (bb.y0 - 0.5) * g * vh + vh / 2;
     const sy1 = (bb.y1 - 0.5) * g * vh + vh / 2;
     if (this._minX != null) {
@@ -136,16 +139,20 @@ export const ghost = {
     if (sy1 - sy0 >= vh - 2 * m) this._off.y = (vh - sy0 - sy1) / 2;
     else if (sy0 < m) this._off.y = m - sy0;
     else if (sy1 > vh - m) this._off.y = vh - m - sy1;
-    // the veil's gradient center sits on the right edge of the
-    // overlay that holds the gesture (the owner's spec): for a clip
-    // playing at the screen's edge that IS the screen's right edge
-    this._veilX = Math.min(vw, Math.max(vw * 0.6, sx1 + this._off.x));
+    // the veil's gradient center sits on the outer edge of the
+    // overlay that holds the gesture (the owner's spec): the right
+    // edge for the left-chapter lesson, mirrored to the left edge
+    // for the right-chapter one
+    this._veilX = this._flip
+      ? Math.max(0, Math.min(vw * 0.4, sx0 + this._off.x))
+      : Math.min(vw, Math.max(vw * 0.6, sx1 + this._off.x));
   },
 
-  show({ mock = false } = {}) {
+  show({ mock = false, side = 'left' } = {}) {
     if (!this.stage) return;
     this.stage.classList.add('on');
     this.stage.classList.toggle('mock-on', mock);
+    this.stage.classList.toggle('mock-right', mock && side === 'right');
   },
 
   hide() { this.stop(true); },   // instant blackout, no choreography
@@ -185,7 +192,8 @@ export const ghost = {
       return (top + (bot - top) * fv) / 255;
     };
     // screen bbox: union of both crop rects
-    const sx = (cx) => ((1 - cx) - 0.5) * this._gain * vw + vw / 2 + this._off.x;
+    const sx = (cx) => (this._flip ? (cx - 0.5) : ((1 - cx) - 0.5))
+      * this._gain * vw + vw / 2 + this._off.x;
     const sy = (cy) => (cy - 0.5) * this._gain * vh + vh / 2 + this._off.y;
     const xs = [sx(fa.x), sx(fa.x + fa.w / fa.fw), sx(fb.x), sx(fb.x + fb.w / fb.fw)];
     const ys = [sy(fa.y), sy(fa.y + fa.h / fa.fh), sy(fb.y), sy(fb.y + fb.h / fb.fh)];
@@ -214,7 +222,9 @@ export const ghost = {
     for (let y = Math.ceil(by0 / STEP) * STEP; y < by1; y += STEP) {
       const cy = (y - this._off.y - vh / 2) / (this._gain * vh) + 0.5;
       for (let x = Math.ceil(bx0 / STEP) * STEP; x < bx1; x += STEP) {
-        const cx = 0.5 - (x - this._off.x - vw / 2) / (this._gain * vw);
+        const cx = this._flip
+          ? (x - this._off.x - vw / 2) / (this._gain * vw) + 0.5
+          : 0.5 - (x - this._off.x - vw / 2) / (this._gain * vw);
         const va = sample(fa, cx, cy);
         const vD = va + (sample(fb, cx, cy) - va) * k;
         if (vD < cut) continue;
@@ -358,12 +368,13 @@ export const ghost = {
     // stack, and the opening palm lets it collapse back.
     this._act = opts.act || null;
     this._minX = opts.minX ?? null;
+    this._flip = !!opts.flip;
     this._grabs = this._act === 'sheet' ? this._judgeGrabs(frames) : null;
     this._fists = this._act === 'gallery' ? this._judgeFists(frames) : null;
     this._t0 = performance.now() / 1000;
     this.playing = true;
     // intro: the being fades in WITH the form's light stepping back
-    this.show({ mock: !!opts.mock });
+    this.show({ mock: !!opts.mock, side: opts.mockSide });
     if (this._dim) this._dim(true);
     this._fit();
     // the fades live OUTSIDE the demonstration (the owner, 12.07): the
@@ -548,7 +559,7 @@ export const ghost = {
     this._raf = 0;
     if (!this.stage) return;
     if (quiet || !wasPlaying) {
-      this.stage.classList.remove('on', 'mock-on', 'fast', 'lb-on');
+      this.stage.classList.remove('on', 'mock-on', 'mock-right', 'fast', 'lb-on');
       if (this.ctx) this.ctx.clearRect(0, 0, innerWidth, innerHeight);
       this._resetSheet();
       return;
@@ -556,7 +567,7 @@ export const ghost = {
     if (this._dim) this._dim(false);
     this._resetSheet();
     this.stage.classList.add('fast');
-    this.stage.classList.remove('on', 'mock-on', 'lb-on');
+    this.stage.classList.remove('on', 'mock-on', 'mock-right', 'lb-on');
     const done = this._onend;
     this._onend = null;
     setTimeout(() => {

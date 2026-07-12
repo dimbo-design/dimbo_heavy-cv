@@ -731,6 +731,10 @@ body.teaching #space { opacity: 0.12; }
   opacity: 0; transition: opacity 0.7s;
 }
 #ghost-stage.mock-on #ghost-mock { opacity: 1; }
+/* the mirrored scroll lesson for right-side chapters: the skeleton
+   stands right, and those chapters carry no photo strip */
+#ghost-stage.mock-right #ghost-mock { left: auto; right: 8vw; }
+#ghost-stage.mock-right #ghost-mock .gm-strip { display: none; }
 #ghost-mock i { display: block; border-radius: 2px; }
 #ghost-mock .gm-kicker {
   width: 92px; height: 9px; margin-bottom: 24px;

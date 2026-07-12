@@ -298,23 +298,22 @@ function boot() {
   if (clip) {
     setTimeout(async () => {
       try {
-        const frames = await ghost.load(clip);
-        // the sheet stands left, the hand plays right where it was
-        // recorded — no anchoring (the owner, 12.07: the hint hand does
-        // NOT sit over the content, same as a real right-hand reach)
-        // gain over the cursor's: the demonstration owns the screen,
-        // its edges dissolved by the radial fade (the owner, 12.07)
-        // both clips play at the recording's own scale and place (the
-        // owner, 12.07: any blowup reads as distortion — «не как я
-        // записывал»)
+        // ?teacher=scroll | scroll-right | photo. The right-chapter
+        // scroll lesson is the SAME recording mirrored (the owner,
+        // 12.07): skeleton right, gesture and veil flipped.
+        const flip = clip === 'scroll-right';
+        const frames = await ghost.load(flip ? 'scroll' : clip);
+        // clips play at the recording's own scale and place (the
+        // owner: any blowup reads as distortion — «не как я записывал»)
         ghost.play(frames, {
           gain: gestures.gain,
-          loops: 3, mock: true,
+          loops: 3, mock: true, flip,
+          mockSide: flip ? 'right' : 'left',
           dim: (on) => {
             field.setTeachDim(on);
             document.body.classList.toggle('teaching', on);
           },
-          act: clip === 'scroll' ? 'sheet' : 'gallery',
+          act: clip === 'photo' ? 'gallery' : 'sheet',
         });
       } catch { /* unknown clip name — the stage stays dark */ }
     }, 1800);
@@ -395,9 +394,14 @@ function boot() {
       app._teachClips ??= {};
       const frames = (app._teachClips[name] ??= await ghost.load(name));
       if (!app.cameraOn || ghost.playing || app.lb || !app.spaceId) return;
+      // the scroll lesson mirrors itself for right-side chapters —
+      // same recording, other hand; learning is shared either way
+      const right = name === 'scroll'
+        && document.body.classList.contains('space-right');
       ghost.play(frames, {
         gain: gestures.gain,
-        loops: 2, mock: true,
+        loops: 2, mock: true, flip: right,
+        mockSide: right ? 'right' : 'left',
         dim: (on) => {
           field.setTeachDim(on);
           document.body.classList.toggle('teaching', on);
