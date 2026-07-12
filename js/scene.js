@@ -352,16 +352,35 @@ export class Field {
     g.translate(W, 0);
     g.scale(-1, 1);
     g.fillStyle = '#fff';
-    g.textAlign = 'center';
-    g.textBaseline = 'middle';
-    const lines = text.split('\n');
-    // a single symbol (the heart, the thumb) fills the plane like a sign,
-    // not a word — Array.from: the 👍 is a surrogate pair, .length lies
-    const fs = Math.min(Array.from(text).length === 1 ? 104 : 46,
-      Math.floor((W * 1.62) / Math.max(...lines.map((l) => l.length))));
-    g.font = `900 ${fs}px "Fixel Display", system-ui, sans-serif`;
-    lines.forEach((l, i) =>
-      g.fillText(l, W / 2, H / 2 + (i - (lines.length - 1) / 2) * fs * 1.14));
+    if (text === '♥') {
+      // the heart is a PATH, not a font glyph: Fixel has no U+2665, so the
+      // sign fell to whatever fallback the browser picked — a friend's
+      // Yandex Browser (Chromium, same macOS) chose the color-emoji face,
+      // and rasterized into the luminance map it shredded into garbage
+      // (field test 11.07). A curve owns its shape on every machine.
+      const s = 3.4;
+      g.beginPath();
+      for (let t = 0; t <= Math.PI * 2 + 0.05; t += 0.05) {
+        const hx = 16 * Math.sin(t) ** 3;
+        const hy = 13 * Math.cos(t) - 5 * Math.cos(2 * t)
+          - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+        const X = W / 2 + hx * s, Y = H / 2 - (hy + 2.5) * s;
+        if (t === 0) g.moveTo(X, Y); else g.lineTo(X, Y);
+      }
+      g.closePath();
+      g.fill();
+    } else {
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      const lines = text.split('\n');
+      // a single symbol (the thumb) fills the plane like a sign, not a
+      // word — Array.from: the 👍 is a surrogate pair, .length lies
+      const fs = Math.min(Array.from(text).length === 1 ? 104 : 46,
+        Math.floor((W * 1.62) / Math.max(...lines.map((l) => l.length))));
+      g.font = `900 ${fs}px "Fixel Display", system-ui, sans-serif`;
+      lines.forEach((l, i) =>
+        g.fillText(l, W / 2, H / 2 + (i - (lines.length - 1) / 2) * fs * 1.14));
+    }
     g.restore();
     const px = g.getImageData(0, 0, W, H).data;
     const d = new Uint8Array(W * H);

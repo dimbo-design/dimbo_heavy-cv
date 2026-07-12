@@ -1557,7 +1557,11 @@ function renderHoldBar() {
 function updateCursor() {
   const g = app.gestures;
   const el = $('cursor');
-  const wanted = g.active && app.state === 'present' && (app.spaceId || app.lb);
+  // the dot lives on the nav screen too (field test 11.07: live visitors
+  // could not tell where the page thought their hand was — the owner's
+  // no-cursor hypothesis lost to real people, and the dot now matches the
+  // chapters' close-cross grammar)
+  const wanted = g.active && app.state === 'present';
   document.body.classList.toggle('cursor-on', !!wanted);
   if (!wanted) { app.hoverDl = null; return; }
   el.style.transform = `translate3d(${g.cursor.x}px, ${g.cursor.y}px, 0)`;
