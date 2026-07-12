@@ -304,17 +304,17 @@ function boot() {
         // NOT sit over the content, same as a real right-hand reach)
         // gain over the cursor's: the demonstration owns the screen,
         // its edges dissolved by the radial fade (the owner, 12.07)
+        // the pinch plays at the recording's own scale and place (the
+        // owner, 12.07: the blowup read as distortion — «не как я
+        // записывал»); the photo keeps its tuned −10% of the wide gain
         ghost.play(frames, {
-          gain: gestures.gain * 1.45 * (clip === 'photo' ? 0.9 : 1),
+          gain: gestures.gain * (clip === 'photo' ? 1.45 * 0.9 : 1),
           loops: 3, mock: true,
           dim: (on) => {
             field.setTeachDim(on);
             document.body.classList.toggle('teaching', on);
           },
           act: clip === 'scroll' ? 'sheet' : 'gallery',
-          // only the scroll lesson is bound beside its mock — the photo
-          // clip plays exactly where it was recorded (the owner, 12.07)
-          minX: clip === 'scroll' ? 0.54 : null,
         });
       } catch { /* unknown clip name — the stage stays dark */ }
     }, 1800);
@@ -396,14 +396,13 @@ function boot() {
       const frames = (app._teachClips[name] ??= await ghost.load(name));
       if (!app.cameraOn || ghost.playing || app.lb || !app.spaceId) return;
       ghost.play(frames, {
-        gain: gestures.gain * 1.45 * (name === 'photo' ? 0.9 : 1),
+        gain: gestures.gain * (name === 'photo' ? 1.45 * 0.9 : 1),
         loops: 2, mock: true,
         dim: (on) => {
           field.setTeachDim(on);
           document.body.classList.toggle('teaching', on);
         },
         act: name === 'scroll' ? 'sheet' : 'gallery',
-        minX: name === 'scroll' ? 0.54 : null,
         onend: () => { teach.lastEndAt = performance.now(); },
       });
     } catch { /* clip missing — the being stays unborn */ }

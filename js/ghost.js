@@ -71,11 +71,16 @@ export const ghost = {
       <i class="gm-title"></i>
       <i class="gm-line"></i><i class="gm-line"></i><i class="gm-line w60"></i>
       <div class="gm-strip"><i></i><i></i><i></i></div>
-      <i class="gm-line"></i><i class="gm-line w80"></i>
-      <div class="gm-lb"><div class="gm-film"><i></i><i></i><i></i></div></div>`;
+      <i class="gm-line"></i><i class="gm-line w80"></i>`;
+    // the mock lightbox lives on the STAGE, not in the sheet column —
+    // a taken photo goes fullscreen on the real site, and the mock
+    // must behave the same (under the hand: the canvas comes after)
+    const lb = document.createElement('div');
+    lb.className = 'gm-lb';
+    lb.innerHTML = '<div class="gm-film"><i></i><i></i><i></i></div>';
     const cv = document.createElement('canvas');
     cv.id = 'ghost-hand';
-    st.append(mock, cv);
+    st.append(mock, lb, cv);
     document.body.appendChild(st);
     this.stage = st;
     this.canvas = cv;
@@ -453,10 +458,10 @@ export const ghost = {
     if (st.fist) {
       if (!gal.on) {
         gal.on = true;
-        this.mock.classList.add('lb-on');
+        this.stage.classList.add('lb-on');
       }
       if (!gal.grab) gal.grab = { x0: st.x, s0: gal.x };
-      const film = this.mock.querySelector('.gm-film');
+      const film = this.stage.querySelector('.gm-film');
       const w = film ? film.clientWidth : 0;
       // mirrored, weighted like the real slider — the stack follows
       const dx = -(st.x - gal.grab.x0) * this._gain * innerWidth * 0.55;
@@ -466,7 +471,7 @@ export const ghost = {
       gal.grab = null;
       if (gal.on) {
         gal.on = false;
-        this.mock.classList.remove('lb-on');
+        this.stage.classList.remove('lb-on');
       }
     }
   },
@@ -492,9 +497,11 @@ export const ghost = {
     if (!this.mock) return;
     this.mock.style.transition = 'opacity 0.7s, transform 0.6s cubic-bezier(0.22, 0.61, 0.36, 1)';
     this.mock.style.transform = 'translateY(-50%)';
-    this.mock.classList.remove('lb-on');
-    const film = this.mock.querySelector('.gm-film');
-    if (film) film.style.transform = 'translateX(0)';
+    if (this.stage) {
+      this.stage.classList.remove('lb-on');
+      const film = this.stage.querySelector('.gm-film');
+      if (film) film.style.transform = 'translateX(0)';
+    }
   },
 
   // outro (and any interrupt): the hint leaves twice as fast as it came,
@@ -507,7 +514,7 @@ export const ghost = {
     this._raf = 0;
     if (!this.stage) return;
     if (quiet || !wasPlaying) {
-      this.stage.classList.remove('on', 'mock-on', 'fast');
+      this.stage.classList.remove('on', 'mock-on', 'fast', 'lb-on');
       if (this.ctx) this.ctx.clearRect(0, 0, innerWidth, innerHeight);
       this._resetSheet();
       return;
@@ -515,7 +522,7 @@ export const ghost = {
     if (this._dim) this._dim(false);
     this._resetSheet();
     this.stage.classList.add('fast');
-    this.stage.classList.remove('on', 'mock-on');
+    this.stage.classList.remove('on', 'mock-on', 'lb-on');
     const done = this._onend;
     this._onend = null;
     setTimeout(() => {
