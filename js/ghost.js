@@ -55,6 +55,13 @@ export const ghost = {
     if (c) this._color = c;
   },
 
+  // the owner's clips live as assets: ⌥G recordings, verbatim
+  async load(name) {
+    const r = await fetch(`assets/ghost/${name}.json`);
+    if (!r.ok) throw new Error(`no such clip: ${name}`);
+    return r.json();
+  },
+
   _fit() {
     const dpr = Math.min(devicePixelRatio || 1, 2);
     if (this.canvas.width !== Math.round(innerWidth * dpr)) {

@@ -289,6 +289,19 @@ function boot() {
   Object.assign(app, { field, engine, hands, pose, gestures, signals, teacher: ghost });
   ghost.mount();   // the stage exists from day one; the being waits for clips
 
+  // ?teacher=scroll|photo — the look-validation loop: play the owner's
+  // recorded clip on the stage, mock sheet behind, three passes. No
+  // triggers, no death book — those come after the look is approved.
+  const clip = new URLSearchParams(location.search).get('teacher');
+  if (clip) {
+    setTimeout(async () => {
+      try {
+        const frames = await ghost.load(clip);
+        ghost.play(frames, { gain: gestures.gain, loops: 3, mock: true });
+      } catch { /* unknown clip name — the stage stays dark */ }
+    }, 1800);
+  }
+
   for (const n of NODES) field.addAnchor(n.id, n.anchor);
   buildNodes();
 
