@@ -191,6 +191,7 @@ const app = {
   glogFull: [],             // whole-session log, copyable from the panel
   rec: null,                // raw hand trace (⌥R): fuel for the finger workshop
   grec: null, grecOn: false,   // fat trace (⌥G): full skeletons for the ghost teacher
+  grecD: null, _grecBox: null, // …and the depth stream: the REAL hand, cropped
   hoverDl: null,            // a[data-dl] under the hand cursor
   focusChangedAt: 0,
   device: null,
@@ -297,12 +298,12 @@ function boot() {
     setTimeout(async () => {
       try {
         const frames = await ghost.load(clip);
+        // the sheet stands left, the hand plays right where it was
+        // recorded — no anchoring (the owner, 12.07: the hint hand does
+        // NOT sit over the content, same as a real right-hand reach)
         ghost.play(frames, {
           gain: gestures.gain, loops: 3, mock: true,
           dim: (on) => field.setTeachDim(on),
-          // the hand plays over the sheet, and for the scroll story the
-          // sheet rides the pinch — the наглядность the hint exists for
-          anchorX: innerWidth * 0.08 + Math.min(280, innerWidth * 0.22),
           follow: clip === 'scroll',
         });
       } catch { /* unknown clip name — the stage stays dark */ }
@@ -336,6 +337,30 @@ function boot() {
     const nowD = performance.now();
     if (nowD < app.glyphUntil) return;           // the words hold the stage
     const { data, width, height, stats } = e.detail;
+    if (app.grecOn && app._grecBox) {
+      // the fat trace, depth stream: the hint must be made of the same
+      // flesh as the form (the owner's verdict 12.07: a hand rebuilt
+      // from landmarks is math, not him) — so ⌥G also keeps the raw
+      // depth crop around the tracked hand, artifacts and all
+      const bb = app._grecBox;
+      const x0 = Math.max(0, Math.floor(bb.x0 * width));
+      const x1 = Math.min(width, Math.ceil(bb.x1 * width));
+      const y0 = Math.max(0, Math.floor(bb.y0 * height));
+      const y1 = Math.min(height, Math.ceil(bb.y1 * height));
+      if (x1 > x0 && y1 > y0) {
+        const w = x1 - x0, hh = y1 - y0;
+        const crop = new Uint8Array(w * hh);
+        for (let y = 0; y < hh; y++) {
+          crop.set(data.subarray((y0 + y) * width + x0, (y0 + y) * width + x1), y * w);
+        }
+        app.grecD.push({
+          t: +(performance.now() / 1000).toFixed(3),
+          x: x0 / width, y: y0 / height, w, h: hh, fw: width, fh: height,
+          d: b64u8(crop),
+        });
+        if (app.grecD.length > 160) app.grecD.shift();
+      }
+    }
     if (app.glyphWasOn) {
       // the words let go the way they arrived, in strict order: scatter
       // first (depth still frozen), then ONE slow crossfade back to the
@@ -472,6 +497,18 @@ function boot() {
           hh.raw.map((p) => [+p.x.toFixed(4), +p.y.toFixed(4), +(p.z || 0).toFixed(4)])),
       });
       if (app.grec.length > 900) app.grec.shift();
+      // the hand's neighborhood, for the depth stream (pad in cam units)
+      let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+      for (const hh of e.detail.hands) {
+        if (!hh?.raw) continue;
+        for (const p of hh.raw) {
+          x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x);
+          y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y);
+        }
+      }
+      app._grecBox = x1 > x0
+        ? { x0: x0 - 0.05, x1: x1 + 0.05, y0: y0 - 0.05, y1: y1 + 0.05 }
+        : null;
     }
   });
 
@@ -1918,12 +1955,23 @@ function toggleGRec() {
   // same contract as ⌥R: stop keeps the buffer, a new start wipes it
   if (app.grecOn) {
     app.grecOn = false;
+    app._grecBox = null;
   } else {
     app.grec = [];
+    app.grecD = [];
     app.grecOn = true;
   }
   const b = $('debug-grec');
   if (b) b.textContent = app.grecOn ? 'rec+ ● пишет' : (app.grec?.length ? 'rec+ ✓ · ⌥T' : 'rec+ (⌥G)');
+}
+
+// Uint8Array → base64, chunked (fromCharCode chokes on long arrays)
+function b64u8(u8) {
+  let s = '';
+  for (let i = 0; i < u8.length; i += 0x8000) {
+    s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+  }
+  return btoa(s);
 }
 
 function logHead() {
@@ -1973,7 +2021,8 @@ function copyRec() {
     ? ['--- trace: t pinch open size palmX palmY indexX indexY wristX wristY', ...app.rec]
     : ['--- trace: пусто (⌥R, движение, ⌥R)'];
   const ghost = app.grec && app.grec.length
-    ? ['--- ghost: полные скелеты, JSON [{t, hands: [[[x,y,z]×21]…]}]', JSON.stringify(app.grec)]
+    ? ['--- ghost: скелеты + глубина, JSON {hands, depth}',
+      JSON.stringify({ hands: app.grec, depth: app.grecD || [] })]
     : [];
   copyText(logHead().concat(trace, ghost).join('\n'), 'debug-copyrec', 'copy rec (⌥T)');
 }

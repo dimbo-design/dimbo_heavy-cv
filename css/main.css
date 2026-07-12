@@ -701,12 +701,12 @@ body.glyph-on #ghint { opacity: 0; }
 .is-mobile #ghint { display: none !important; }
 
 /* ── ghost teacher ──────────────────────────────────────────────
-   the owner's recorded hand replayed as a separate being: the
-   counter-color against the site's amber (the cinema teal-orange
-   split — cold reads as "not you"). Above the chapter sheet (35),
-   below the visitor's own cursor (80). Dormant until wired. */
-
-:root { --ghost-rgb: 93, 159, 217; }
+   the owner's recorded hand replayed as a separate being, made of
+   the form's own flesh (depth clips, bone-to-amber palette on the
+   canvas side). The mock sheet obeys the site's chromatic law: UI
+   is strictly monochrome — ink at whispers, color lives only in
+   the flesh. Above the chapter sheet (35), below the visitor's own
+   cursor (80). Dormant until wired. */
 
 #ghost-stage {
   position: fixed; inset: 0; z-index: 55; pointer-events: none;
@@ -729,23 +729,23 @@ body.glyph-on #ghint { opacity: 0; }
 #ghost-mock i { display: block; border-radius: 2px; }
 #ghost-mock .gm-kicker {
   width: 92px; height: 9px; margin-bottom: 24px;
-  background: rgba(var(--ghost-rgb), 0.30);
+  background: rgba(232, 228, 218, 0.22);
 }
 #ghost-mock .gm-title {
   width: 72%; height: 28px; margin-bottom: 30px;
-  background: rgba(var(--ghost-rgb), 0.20);
+  background: rgba(232, 228, 218, 0.15);
 }
 #ghost-mock .gm-line {
   width: 100%; height: 11px; margin-bottom: 15px;
-  background: rgba(var(--ghost-rgb), 0.11);
+  background: rgba(232, 228, 218, 0.08);
 }
 #ghost-mock .gm-line.w60 { width: 60%; }
 #ghost-mock .gm-line.w80 { width: 80%; }
 #ghost-mock .gm-strip { display: flex; gap: 14px; margin: 28px 0; }
 #ghost-mock .gm-strip i {
   flex: 1; aspect-ratio: 4 / 3;
-  background: rgba(var(--ghost-rgb), 0.08);
-  border: 1px solid rgba(var(--ghost-rgb), 0.28);
+  background: rgba(232, 228, 218, 0.05);
+  border: 1px solid rgba(232, 228, 218, 0.16);
 }
 .is-mobile #ghost-stage { display: none !important; }
 
