@@ -238,6 +238,7 @@ export class Field {
     // {x: fraction of half-width (−1..1), rotY, scale, dim}
     this.pose = null;
     this._poseX = 0; this._poseRotY = 0; this._poseScale = 1; this._poseDim = 0;
+    this._teach = 0; this.tTeach = 0; this._teachRate = 3.2;
 
     this._exhale = 0;
     this._pulse = 0;
@@ -399,6 +400,15 @@ export class Field {
     this.setDepth(d, W, H, 900, { x: 0, y: 0 });
   }
 
+  // the ghost teacher's stage light: the form yields while the being
+  // speaks. The intro dims briskly with the entrance; the outro lets the
+  // light straighten back slowly — half the speed of the hint's own fade
+  // (the owner's timing spec, 12.07)
+  setTeachDim(on) {
+    this.tTeach = on ? 1 : 0;
+    this._teachRate = on ? 3.2 : 1.1;
+  }
+
   setTargets({ coherence, opacity, progress }) {
     if (coherence !== undefined) this.tCoherence = coherence;
     if (opacity !== undefined) this.tOpacity = opacity;
@@ -481,7 +491,9 @@ export class Field {
     u.uCoherence.value += (this.tCoherence - u.uCoherence.value) * kc;
     const k = 1 - Math.exp(-dt * 2.4);             // smooth approach
 
-    u.uOpacity.value += (this.tOpacity - u.uOpacity.value) * k;
+    const kt = 1 - Math.exp(-dt * this._teachRate);
+    this._teach += (this.tTeach - this._teach) * kt;
+    u.uOpacity.value += (this.tOpacity * (1 - this._teach * 0.75) - u.uOpacity.value) * k;
     u.uProgress.value += (this.tProgress - u.uProgress.value) * (1 - Math.exp(-dt * 1.2));
 
     // pose eases the whole group toward the chapter's arrangement

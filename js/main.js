@@ -297,7 +297,10 @@ function boot() {
     setTimeout(async () => {
       try {
         const frames = await ghost.load(clip);
-        ghost.play(frames, { gain: gestures.gain, loops: 3, mock: true });
+        ghost.play(frames, {
+          gain: gestures.gain, loops: 3, mock: true,
+          dim: (on) => field.setTeachDim(on),
+        });
       } catch { /* unknown clip name — the stage stays dark */ }
     }, 1800);
   }

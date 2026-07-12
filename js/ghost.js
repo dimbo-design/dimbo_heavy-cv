@@ -77,50 +77,63 @@ export const ghost = {
     this.stage.classList.toggle('mock-on', mock);
   },
 
-  hide() {
-    if (!this.stage) return;
-    this.stage.classList.remove('on', 'mock-on');
-    this.stop();
-  },
+  hide() { this.stop(true); },   // instant blackout, no choreography
 
-  // one skeleton, camera-frame landmarks → screen via the gestures mapping
+  // one hand, camera-frame landmarks → screen via the gestures mapping.
+  // The being speaks the site's language: PARTICLES, not wire (the
+  // owner's verdict, 12.07: the skeleton was functionally obvious but
+  // scared and broke the vibe) — dots seeded along every bone, joints a
+  // touch brighter, fingertips brightest. 15% smaller, folded around
+  // the palm centre so the clip keeps its position.
   drawHand(lm, alpha = 1) {
     const g = this.ctx, vw = innerWidth, vh = innerHeight;
-    const px = (p) => ((1 - p[0]) - 0.5) * this._gain * vw + vw / 2;
-    const py = (p) => (p[1] - 0.5) * this._gain * vh + vh / 2;
-    g.lineCap = 'round';
-    g.lineJoin = 'round';
-    // a soft halo first, the crisp bone on top — reads as light, not wire
-    for (const [w, a] of [[7, 0.16 * alpha], [1.6, 0.85 * alpha]]) {
-      g.lineWidth = w;
-      g.strokeStyle = `rgba(${this._color}, ${a})`;
-      g.beginPath();
-      for (const [i, j] of CONNECTIONS) {
-        g.moveTo(px(lm[i]), py(lm[i]));
-        g.lineTo(px(lm[j]), py(lm[j]));
+    const cx = (lm[0][0] + lm[5][0] + lm[9][0] + lm[13][0] + lm[17][0]) / 5;
+    const cy = (lm[0][1] + lm[5][1] + lm[9][1] + lm[13][1] + lm[17][1]) / 5;
+    const s = 0.85;
+    const px = (p) => ((1 - (cx + (p[0] - cx) * s)) - 0.5) * this._gain * vw + vw / 2;
+    const py = (p) => ((cy + (p[1] - cy) * s) - 0.5) * this._gain * vh + vh / 2;
+    const TAU = Math.PI * 2;
+    const dot = (x, y, r, a) => {
+      g.beginPath(); g.arc(x, y, r * 3, 0, TAU);
+      g.fillStyle = `rgba(${this._color}, ${a * 0.10})`; g.fill();
+      g.beginPath(); g.arc(x, y, r, 0, TAU);
+      g.fillStyle = `rgba(${this._color}, ${a})`; g.fill();
+    };
+    for (let ci = 0; ci < CONNECTIONS.length; ci++) {
+      const [i, j] = CONNECTIONS[ci];
+      const ax = px(lm[i]), ay = py(lm[i]), bx = px(lm[j]), by = py(lm[j]);
+      const n = Math.max(2, Math.round(Math.hypot(bx - ax, by - ay) / 9));
+      for (let k = 1; k < n; k++) {
+        const t = k / n;
+        // a deterministic breath of disorder — a straight dotted line
+        // would read as wire again
+        const jx = Math.sin((ci * 31 + k) * 12.9898) * 1.2;
+        const jy = Math.cos((ci * 17 + k) * 78.233) * 1.2;
+        dot(ax + (bx - ax) * t + jx, ay + (by - ay) * t + jy, 1.3, 0.5 * alpha);
       }
-      g.stroke();
     }
-    g.fillStyle = `rgba(${this._color}, ${0.9 * alpha})`;
-    for (const i of TIPS) {
-      g.beginPath();
-      g.arc(px(lm[i]), py(lm[i]), 2.6, 0, Math.PI * 2);
-      g.fill();
+    for (let i = 0; i < 21; i++) {
+      dot(px(lm[i]), py(lm[i]), TIPS.includes(i) ? 2.4 : 1.8, 0.85 * alpha);
     }
   },
 
   // replay a ⌥G trace. opts: gain (take app.gestures.gain), loops,
-  // onend, mock (show the sheet skeleton behind the hand)
+  // onend, mock (show the sheet skeleton behind the hand), dim (a
+  // callback (on) => … that yields the stage light — main wires it to
+  // field.setTeachDim so this module never imports the scene)
   play(frames, opts = {}) {
     if (!frames || frames.length < 2 || !this.stage) return;
-    this.stop();
+    this.stop(true);
     this._frames = frames;
     this._gain = opts.gain || this._gain;
     this._loops = opts.loops ?? 1;
     this._onend = opts.onend || null;
+    this._dim = opts.dim || null;
     this._t0 = performance.now() / 1000 - frames[0].t;
     this.playing = true;
+    // intro: the being fades in WITH the form's light stepping back
     this.show({ mock: !!opts.mock });
+    if (this._dim) this._dim(true);
     this._fit();
     const tick = () => {
       if (!this.playing) return;
@@ -133,9 +146,7 @@ export const ghost = {
           this._raf = requestAnimationFrame(tick);
           return;
         }
-        const done = this._onend;
-        this.hide();
-        if (done) done();
+        this.stop();
         return;
       }
       if (i === 0) i = 1;
@@ -159,10 +170,29 @@ export const ghost = {
     this._raf = requestAnimationFrame(tick);
   },
 
-  stop() {
+  // outro (and any interrupt): the hint leaves twice as fast as it came,
+  // the form's light straightens back slowly (setTeachDim's own rate).
+  // quiet=true skips the choreography — a restart's internal cleanup.
+  stop(quiet = false) {
+    const wasPlaying = this.playing;
     this.playing = false;
     if (this._raf) cancelAnimationFrame(this._raf);
     this._raf = 0;
-    if (this.ctx) this.ctx.clearRect(0, 0, innerWidth, innerHeight);
+    if (!this.stage) return;
+    if (quiet || !wasPlaying) {
+      this.stage.classList.remove('on', 'mock-on', 'fast');
+      if (this.ctx) this.ctx.clearRect(0, 0, innerWidth, innerHeight);
+      return;
+    }
+    if (this._dim) this._dim(false);
+    this.stage.classList.add('fast');
+    this.stage.classList.remove('on', 'mock-on');
+    const done = this._onend;
+    this._onend = null;
+    setTimeout(() => {
+      if (this.ctx) this.ctx.clearRect(0, 0, innerWidth, innerHeight);
+      this.stage.classList.remove('fast');
+    }, 420);
+    if (done) done();
   },
 };
