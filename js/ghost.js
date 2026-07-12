@@ -194,9 +194,14 @@ export const ghost = {
     // the veil, the owner's spec (12.07): a radial opacity gradient
     // 78%→0, diameter 110% of the screen width, centered mid-height
     // on the right edge of the gesture's overlay — the gesture lives
-    // in its light and dissolves toward the content side. No
-    // crop-hugging, ever: the design is his, the code obeys.
+    // in its light and dissolves toward the content side.
     const vR = vw * 0.55, vox = this._veilX ?? vw, voy = vh / 2;
+    // the stump geometry: center/half-size of the drawn region, the
+    // rounded corner and the width of the cut-edge gradient
+    const rcx = (bx0 + bx1) / 2, rcy = (by0 + by1) / 2;
+    const rbx = Math.max(1, (bx1 - bx0) / 2), rby = Math.max(1, (by1 - by0) / 2);
+    const crad = Math.max(18, Math.min(rbx, rby) * 0.35);
+    const cutBand = Math.max(24, Math.min(rbx, rby) * 0.28);
     // the accent glow rides the nearest point of the ahead frame,
     // lerped — one coherent bluish breath, not per-dot speckle (depth
     // noise at hand scale would shimmer)
@@ -213,12 +218,15 @@ export const ghost = {
         const va = sample(fa, cx, cy);
         const vD = va + (sample(fb, cx, cy) - va) * k;
         if (vD < cut) continue;
-        // the crop must not exist visually: the silhouette dissolves
-        // through a soft threshold, and any flesh reaching the
-        // recording's border dies out before the straight line can
-        // show — no cut edges on the gesture, ever
-        const soft = ss(cut, cut + 0.07, vD)
-          * ss(0, 12, Math.min(x - bx0, bx1 - x, y - by0, by1 - y));
+        // the stump's cut edges fade through a WIDE gradient into
+        // transparency, and its corners (where the arm implies its
+        // continuation) are rounded — a rounded-rect distance field
+        // over the recording's borders (the owner's spec, 12.07)
+        const qx = Math.abs(x - rcx) - (rbx - crad);
+        const qy = Math.abs(y - rcy) - (rby - crad);
+        const sdf = Math.hypot(Math.max(qx, 0), Math.max(qy, 0))
+          + Math.min(Math.max(qx, qy), 0) - crad;
+        const soft = ss(cut, cut + 0.07, vD) * ss(0, cutBand, -sdf);
         const fade = 0.78 * soft
           * Math.max(0, 1 - Math.hypot(x - vox, y - voy) / vR);
         if (fade < 0.02) continue;
