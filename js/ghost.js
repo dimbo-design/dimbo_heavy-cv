@@ -25,21 +25,24 @@ const FINGERS = [
 ];
 const PALM = [0, 1, 5, 9, 13, 17];
 
-// the form's own colors (scene.js FRAG): bone base, amber accent
-const BONE = [231, 226, 213];
-const AMBER = [217, 163, 93];
+// the ghost's own colors (the owner, 12.07, restoring the earlier
+// call): silver flesh with a bluish accent — the counter-voice to the
+// form's bone-and-amber, a spirit, not the site's body
+const SILVER = [201, 209, 222];
+const BLUE = [93, 159, 217];
 const ss = (a, b, x) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
 };
-// the shader's coloring, re-spoken: mix(bone*0.62, bone, vD), then the
-// amber band where the flesh is closest
-function tint(vD) {
-  const m = 0.62 + 0.38 * vD;
-  const band = ss(0.80, 0.96, vD) * 0.6;
-  const r = BONE[0] * m + (AMBER[0] - BONE[0] * m) * band;
-  const g = BONE[1] * m + (AMBER[1] - BONE[1] * m) * band;
-  const b = BONE[2] * m + (AMBER[2] - BONE[2] * m) * band;
+// the shader's coloring, re-spoken: mix(base*0.62, base, vD), then the
+// accent band where the flesh is closest
+// vN drives the silver body's light; band [0..1] pulls toward the
+// bluish accent — the caller decides where the accent lives
+function tint(vN, band = 0) {
+  const m = 0.62 + 0.38 * vN;
+  const r = SILVER[0] * m + (BLUE[0] - SILVER[0] * m) * band;
+  const g = SILVER[1] * m + (BLUE[1] - SILVER[1] * m) * band;
+  const b = SILVER[2] * m + (BLUE[2] - SILVER[2] * m) * band;
   return `${r | 0}, ${g | 0}, ${b | 0}`;
 }
 
@@ -54,7 +57,7 @@ export const ghost = {
   stage: null, canvas: null, ctx: null, mock: null,
   playing: false,
   _raf: 0, _frames: null, _depth: null, _t0: 0, _loops: 1, _gain: 1.3,
-  _onend: null,
+  _onend: null, _bb: null, _off: { x: 0, y: 0 },
 
   mount() {
     if (this.stage) return;
@@ -93,6 +96,27 @@ export const ghost = {
       this.canvas.height = Math.round(innerHeight * dpr);
     }
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this._refit();
+  },
+
+  // the being plays where it was recorded — but never off the stage:
+  // the smallest shift that keeps the whole gesture inside the
+  // viewport (the raised gain would otherwise clip fingers at edges)
+  _refit() {
+    const bb = this._bb;
+    this._off = { x: 0, y: 0 };
+    if (!bb) return;
+    const g = this._gain, vw = innerWidth, vh = innerHeight, m = 30;
+    const sx0 = ((1 - bb.x1) - 0.5) * g * vw + vw / 2;
+    const sx1 = ((1 - bb.x0) - 0.5) * g * vw + vw / 2;
+    const sy0 = (bb.y0 - 0.5) * g * vh + vh / 2;
+    const sy1 = (bb.y1 - 0.5) * g * vh + vh / 2;
+    if (sx1 - sx0 >= vw - 2 * m) this._off.x = (vw - sx0 - sx1) / 2;
+    else if (sx0 < m) this._off.x = m - sx0;
+    else if (sx1 > vw - m) this._off.x = vw - m - sx1;
+    if (sy1 - sy0 >= vh - 2 * m) this._off.y = (vh - sy0 - sy1) / 2;
+    else if (sy0 < m) this._off.y = m - sy0;
+    else if (sy1 > vh - m) this._off.y = vh - m - sy1;
   },
 
   show({ mock = false } = {}) {
@@ -111,9 +135,13 @@ export const ghost = {
     for (const f of [fa, fb]) {
       if (!f._u) {
         f._u = unb64(f.d);
-        let mx = 0;
-        for (let i = 0; i < f._u.length; i++) if (f._u[i] > mx) mx = f._u[i];
+        let mx = 0, mi = 0;
+        for (let i = 0; i < f._u.length; i++) if (f._u[i] > mx) { mx = f._u[i]; mi = i; }
         f._max = mx;
+        // where the nearest flesh lives, in camera coords — the seat
+        // of the bluish accent
+        f._nx = f.x + ((mi % f.w) + 0.5) / f.fw;
+        f._ny = f.y + (Math.floor(mi / f.w) + 0.5) / f.fh;
       }
     }
     // background/body cutoff, adaptive to the clip's own depth range —
@@ -134,22 +162,39 @@ export const ghost = {
       return (top + (bot - top) * fv) / 255;
     };
     // screen bbox: union of both crop rects
-    const sx = (cx) => ((1 - cx) - 0.5) * this._gain * vw + vw / 2;
-    const sy = (cy) => (cy - 0.5) * this._gain * vh + vh / 2;
+    const sx = (cx) => ((1 - cx) - 0.5) * this._gain * vw + vw / 2 + this._off.x;
+    const sy = (cy) => (cy - 0.5) * this._gain * vh + vh / 2 + this._off.y;
     const xs = [sx(fa.x), sx(fa.x + fa.w / fa.fw), sx(fb.x), sx(fb.x + fb.w / fb.fw)];
     const ys = [sy(fa.y), sy(fa.y + fa.h / fa.fh), sy(fb.y), sy(fb.y + fb.h / fb.fh)];
     const bx0 = Math.max(0, Math.min(...xs)), bx1 = Math.min(vw, Math.max(...xs));
     const by0 = Math.max(0, Math.min(...ys)), by1 = Math.min(vh, Math.max(...ys));
+    // radial breath around the gesture (the owner, 12.07): the crop
+    // rectangle must never read as a frame — flesh dissolves into
+    // transparency away from the gesture's own center. Elliptical, so
+    // the fade reaches the near sides of tall or wide crops too
+    const rcx = (bx0 + bx1) / 2, rcy = (by0 + by1) / 2;
+    const rhw = Math.max(1, (bx1 - bx0) / 2), rhh = Math.max(1, (by1 - by0) / 2);
+    // the accent glow rides the nearest point of the ahead frame,
+    // lerped — one coherent bluish breath, not per-dot speckle (depth
+    // noise at hand scale would shimmer)
+    const gx = sx(fa._nx + (fb._nx - fa._nx) * k);
+    const gy = sy(fa._ny + (fb._ny - fa._ny) * k);
+    const gR = Math.max(24, Math.hypot(
+      (fb.w / fb.fw) * this._gain * vw, (fb.h / fb.fh) * this._gain * vh) * 0.30);
     const STEP = 7;
     const TAU = Math.PI * 2;
     for (let y = Math.ceil(by0 / STEP) * STEP; y < by1; y += STEP) {
-      const cy = (y - vh / 2) / (this._gain * vh) + 0.5;
+      const cy = (y - this._off.y - vh / 2) / (this._gain * vh) + 0.5;
       for (let x = Math.ceil(bx0 / STEP) * STEP; x < bx1; x += STEP) {
-        const cx = 0.5 - (x - vw / 2) / (this._gain * vw);
+        const cx = 0.5 - (x - this._off.x - vw / 2) / (this._gain * vw);
         const va = sample(fa, cx, cy);
         const vD = va + (sample(fb, cx, cy) - va) * k;
         if (vD < cut) continue;
+        const fade = 1 - ss(0.55, 0.98,
+          Math.hypot((x - rcx) / rhw, (y - rcy) / rhh));
+        if (fade < 0.02) continue;
         const vN = Math.min(1, (vD - cut) / span);
+        const band = (1 - ss(gR * 0.25, gR, Math.hypot(x - gx, y - gy))) * 0.6;
         // the shader's own light: lum by proximity, exposure kept on
         // the near flesh (scene.js FRAG, same curves)
         const lum = (0.16 + 0.69 * vN) * (0.30 + 0.70 * ss(0.06, 0.45, vN));
@@ -157,7 +202,7 @@ export const ghost = {
         const jy = Math.cos((x + y * 11) * 78.233) * 1.4;
         g.beginPath();
         g.arc(x + jx, y + jy, 1.1 + vN * 1.2, 0, TAU);
-        g.fillStyle = `rgba(${tint(vN)}, ${Math.min(1, lum * 1.35) * life})`;
+        g.fillStyle = `rgba(${tint(vN, band)}, ${Math.min(1, lum * 1.35) * life * fade})`;
         g.fill();
       }
     }
@@ -251,6 +296,15 @@ export const ghost = {
     this.stop(true);
     this._frames = frames;
     this._depth = (!Array.isArray(clip) && clip.depth?.length > 1) ? clip.depth : null;
+    this._bb = null;
+    if (this._depth) {
+      let x0 = 1, y0 = 1, x1 = 0, y1 = 0;
+      for (const f of this._depth) {
+        x0 = Math.min(x0, f.x); y0 = Math.min(y0, f.y);
+        x1 = Math.max(x1, f.x + f.w / f.fw); y1 = Math.max(y1, f.y + f.h / f.fh);
+      }
+      this._bb = { x0, y0, x1, y1 };
+    }
     this._gain = opts.gain || this._gain;
     this._loops = opts.loops ?? 1;
     this._onend = opts.onend || null;
@@ -271,13 +325,16 @@ export const ghost = {
     // being arrives holding its first pose, plays the gesture at full
     // presence, and leaves holding the last — the word itself is never
     // half-transparent
-    const INTRO = 0.45, OUTRO = 0.35;
+    // the word is spoken slower than the hand that recorded it (the
+    // owner, 12.07: 0.6 of natural speed) — a demonstration, not a race
+    const INTRO = 0.45, OUTRO = 0.35, RATE = 0.6;
     const tick = () => {
       if (!this.playing) return;
       const fr = this._frames;
       const dur = fr[fr.length - 1].t - fr[0].t;
+      const body = dur / RATE;
       const el = performance.now() / 1000 - this._t0;
-      if (el >= INTRO + dur + OUTRO) {
+      if (el >= INTRO + body + OUTRO) {
         if (--this._loops > 0) {
           this._t0 = performance.now() / 1000;
           this._resetSheet();
@@ -288,8 +345,8 @@ export const ghost = {
         return;
       }
       const life = el < INTRO ? ss(0, 1, el / INTRO)
-        : el > INTRO + dur ? ss(0, 1, 1 - (el - INTRO - dur) / OUTRO) : 1;
-      const t = fr[0].t + Math.min(dur, Math.max(0, el - INTRO));
+        : el > INTRO + body ? ss(0, 1, 1 - (el - INTRO - body) / OUTRO) : 1;
+      const t = fr[0].t + Math.min(dur, Math.max(0, (el - INTRO) * RATE));
       let i = fr.findIndex((f) => f.t > t);
       if (i === -1) i = fr.length - 1;
       if (i === 0) i = 1;

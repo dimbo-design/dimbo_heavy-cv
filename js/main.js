@@ -301,8 +301,10 @@ function boot() {
         // the sheet stands left, the hand plays right where it was
         // recorded — no anchoring (the owner, 12.07: the hint hand does
         // NOT sit over the content, same as a real right-hand reach)
+        // gain over the cursor's: the demonstration owns the screen,
+        // its edges dissolved by the radial fade (the owner, 12.07)
         ghost.play(frames, {
-          gain: gestures.gain, loops: 3, mock: true,
+          gain: gestures.gain * 1.45, loops: 3, mock: true,
           dim: (on) => field.setTeachDim(on),
           follow: clip === 'scroll',
         });

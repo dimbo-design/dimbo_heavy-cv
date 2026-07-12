@@ -493,7 +493,7 @@ export class Field {
 
     const kt = 1 - Math.exp(-dt * this._teachRate);
     this._teach += (this.tTeach - this._teach) * kt;
-    u.uOpacity.value += (this.tOpacity * (1 - this._teach * 0.75) - u.uOpacity.value) * k;
+    u.uOpacity.value += (this.tOpacity * (1 - this._teach * 0.85) - u.uOpacity.value) * k;
     u.uProgress.value += (this.tProgress - u.uProgress.value) * (1 - Math.exp(-dt * 1.2));
 
     // pose eases the whole group toward the chapter's arrangement
