@@ -71,7 +71,8 @@ export const ghost = {
       <i class="gm-title"></i>
       <i class="gm-line"></i><i class="gm-line"></i><i class="gm-line w60"></i>
       <div class="gm-strip"><i></i><i></i><i></i></div>
-      <i class="gm-line"></i><i class="gm-line w80"></i>`;
+      <i class="gm-line"></i><i class="gm-line w80"></i>
+      <div class="gm-lb"><div class="gm-film"><i></i><i></i><i></i></div></div>`;
     const cv = document.createElement('canvas');
     cv.id = 'ghost-hand';
     st.append(mock, cv);
@@ -190,8 +191,10 @@ export const ghost = {
         const va = sample(fa, cx, cy);
         const vD = va + (sample(fb, cx, cy) - va) * k;
         if (vD < cut) continue;
-        const fade = 1 - ss(0.55, 0.98,
-          Math.hypot((x - rcx) / rhw, (y - rcy) / rhh));
+        // more ghost than flesh (the owner, 12.07): 76% at the heart of
+        // the gesture, dissolving to nothing at the edges
+        const fade = 0.76 * (1 - ss(0.55, 0.98,
+          Math.hypot((x - rcx) / rhw, (y - rcy) / rhh)));
         if (fade < 0.02) continue;
         const vN = Math.min(1, (vD - cut) / span);
         const band = (1 - ss(gR * 0.25, gR, Math.hypot(x - gx, y - gy))) * 0.6;
@@ -310,11 +313,17 @@ export const ghost = {
     this._onend = opts.onend || null;
     this._dim = opts.dim || null;
     this._sheet = { y: 0, grab: null };
-    // the sheet moves ONLY while the word is actually engaged (the
-    // owner, 12.07: no chasing an illusory hand) — grab states are
+    this._gal = { x: 0, grab: null, on: false };
+    // the mock moves ONLY while the word is actually engaged (the
+    // owner, 12.07: no chasing an illusory hand) — grab/fist states are
     // judged once, over the recorded frames, with the detector's own
-    // sternness: two frames to engage, two to release
-    this._grabs = opts.follow ? this._judgeGrabs(frames) : null;
+    // sternness: two frames to engage, two to release.
+    // act 'sheet': pinch drags the page. act 'gallery': the fist takes
+    // a photo (strip cell swells into a frame), carries it through the
+    // stack, and the opening palm lets it collapse back.
+    this._act = opts.act || null;
+    this._grabs = this._act === 'sheet' ? this._judgeGrabs(frames) : null;
+    this._fists = this._act === 'gallery' ? this._judgeFists(frames) : null;
     this._t0 = performance.now() / 1000;
     this.playing = true;
     // intro: the being fades in WITH the form's light stepping back
@@ -375,6 +384,7 @@ export const ghost = {
         }
       }
       if (this._grabs) this._followSheet(i - 1);
+      else if (this._fists) this._followGallery(i - 1);
       this._raf = requestAnimationFrame(tick);
     };
     this._raf = requestAnimationFrame(tick);
@@ -397,6 +407,56 @@ export const ghost = {
     });
   },
 
+  // fist states over the recorded frames, hands.js geometry: open =
+  // mean fingertip-to-palm reach over hand size. The owner's clip
+  // separates cleanly (palm 1.09–1.29, fist 0.17–0.28) — thresholds
+  // sit in the gap with room to spare
+  _judgeFists(frames) {
+    const d = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]);
+    let fist = false, below = 0, above = 0;
+    return frames.map((f) => {
+      const lm = f.hands[0];
+      if (!lm) { below = 0; above = 0; return { fist, x: 0 }; }
+      let px = 0, py = 0;
+      for (const i of [0, 5, 9, 13, 17]) { px += lm[i][0]; py += lm[i][1]; }
+      const palm = [px / 5, py / 5];
+      const size = d(lm[0], lm[9]) + 1e-6;
+      const open = [8, 12, 16, 20].reduce((s, i) => s + d(lm[i], palm), 0) / 4 / size;
+      below = open < 0.55 ? below + 1 : 0;
+      above = open > 0.90 ? above + 1 : 0;
+      if (!fist && below >= 2) fist = true;
+      else if (fist && above >= 2) fist = false;
+      return { fist, x: palm[0] };
+    });
+  },
+
+  // the gallery act: clench — a strip cell swells into the big frame;
+  // the held fist carries the stack under it (the site's own fist
+  // slider); the opening palm collapses the frame back into the strip
+  _followGallery(fi) {
+    const st = this._fists[fi];
+    const gal = this._gal;
+    if (st.fist) {
+      if (!gal.on) {
+        gal.on = true;
+        this.mock.classList.add('lb-on');
+      }
+      if (!gal.grab) gal.grab = { x0: st.x, s0: gal.x };
+      const film = this.mock.querySelector('.gm-film');
+      const w = film ? film.clientWidth : 0;
+      // mirrored, weighted like the real slider — the stack follows
+      const dx = -(st.x - gal.grab.x0) * this._gain * innerWidth * 0.55;
+      gal.x = Math.max(-(2 * (w + 16)), Math.min(0, gal.grab.s0 + dx));
+      if (film) film.style.transform = `translateX(${gal.x}px)`;
+    } else {
+      gal.grab = null;
+      if (gal.on) {
+        gal.on = false;
+        this.mock.classList.remove('lb-on');
+      }
+    }
+  },
+
   // the demonstration's whole point: the mock sheet BEHAVES — it stands
   // still until the recorded fingers close, rides the hand exactly as a
   // chapter rides a real pinch, and stops the moment they part
@@ -414,9 +474,13 @@ export const ghost = {
 
   _resetSheet() {
     this._sheet = { y: 0, grab: null };
+    this._gal = { x: 0, grab: null, on: false };
     if (!this.mock) return;
     this.mock.style.transition = 'opacity 0.7s, transform 0.6s cubic-bezier(0.22, 0.61, 0.36, 1)';
     this.mock.style.transform = 'translateY(-50%)';
+    this.mock.classList.remove('lb-on');
+    const film = this.mock.querySelector('.gm-film');
+    if (film) film.style.transform = 'translateX(0)';
   },
 
   // outro (and any interrupt): the hint leaves twice as fast as it came,

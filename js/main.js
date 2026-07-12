@@ -33,7 +33,8 @@ let lang = localStorage.getItem('lang') ||
 // (for first-touch testing after your own hands have learned the site)
 if (new URLSearchParams(location.search).has('fresh')) {
   try {
-    for (const k of ['visited', 'lang', 'gl_open', 'gl_close']) localStorage.removeItem(k);
+    for (const k of ['visited', 'lang', 'gl_open', 'gl_close',
+      'gl_teach_scroll', 'gl_teach_photo']) localStorage.removeItem(k);
   } catch (_) { /* ok */ }
 }
 // in-object hints: they live in the sub-label slots and die after the
@@ -306,10 +307,83 @@ function boot() {
         ghost.play(frames, {
           gain: gestures.gain * 1.45, loops: 3, mock: true,
           dim: (on) => field.setTeachDim(on),
-          follow: clip === 'scroll',
+          act: clip === 'scroll' ? 'sheet' : 'gallery',
         });
       } catch { /* unknown clip name — the stage stays dark */ }
     }, 1800);
+  }
+
+  // ---- the being's real life (the owner's spec, 12.07). Born on
+  // stalling: a live hand in a chapter whose content stands still.
+  // Learned in order — the photo lesson waits until scrolling is
+  // learned. Dies on the first real success (localStorage, ?fresh
+  // forgets). Each hint repeats every 45s until learned; after any
+  // demonstration the OTHER one holds 10s of silence — cooldowns
+  // never stack. ?teacher keeps the stage for look-validation only.
+  const teach = app.teach = {
+    scrollDead: !!localStorage.getItem('gl_teach_scroll'),
+    photoDead: !!localStorage.getItem('gl_teach_photo'),
+    scrollNextAt: 0, photoNextAt: 0, lastEndAt: 0,
+    stillAt: performance.now(), calmAt: performance.now(),
+    lastScrollY: 0, acc: 0,
+  };
+  app.teachScrolled = (px) => {
+    if (teach.scrollDead) return;
+    teach.acc += Math.abs(px);
+    if (teach.acc > 60) teachLearned('scroll');
+  };
+  function teachLearned(which) {
+    if (which === 'scroll' && !teach.scrollDead) {
+      teach.scrollDead = true;
+      localStorage.setItem('gl_teach_scroll', '1');
+    }
+    if (which === 'photo' && !teach.photoDead) {
+      teach.photoDead = true;
+      localStorage.setItem('gl_teach_photo', '1');
+    }
+    // a visitor acting is a visitor taught — the lesson yields at once
+    if (ghost.playing) ghost.stop();
+  }
+  app.teachLearned = teachLearned;
+  // a grip or a fist means the hand is busy acting, not stalled
+  for (const ev of ['grabstart', 'clench']) {
+    gestures.addEventListener(ev, () => {
+      teach.stillAt = teach.calmAt = performance.now();
+    });
+  }
+  if (!clip) {
+    setInterval(() => {
+      if (!app.cameraOn || ghost.playing) return;
+      const now = performance.now();
+      const hand = !!gestures.hand;
+      const inChapter = app.spaceId && !app.lb;
+      if (Math.abs(app.scroll.y - teach.lastScrollY) > 3) {
+        teach.lastScrollY = app.scroll.y;
+        teach.stillAt = now;
+      }
+      if (!inChapter || !hand || app.scroll.max <= 0) teach.stillAt = now;
+      if (!inChapter || !hand
+        || !document.querySelector('#space-inner .strip figure')) teach.calmAt = now;
+      if (now - teach.lastEndAt < 10000) return;
+      if (!teach.scrollDead && now > teach.scrollNextAt
+        && now - teach.stillAt > 6000) { teachPlay('scroll'); return; }
+      if (teach.scrollDead && !teach.photoDead && now > teach.photoNextAt
+        && now - teach.calmAt > 8000) teachPlay('photo');
+    }, 500);
+  }
+  async function teachPlay(name) {
+    teach[`${name}NextAt`] = performance.now() + 45000;
+    try {
+      app._teachClips ??= {};
+      const frames = (app._teachClips[name] ??= await ghost.load(name));
+      if (!app.cameraOn || ghost.playing || app.lb || !app.spaceId) return;
+      ghost.play(frames, {
+        gain: gestures.gain * 1.45, loops: 2, mock: true,
+        dim: (on) => field.setTeachDim(on),
+        act: name === 'scroll' ? 'sheet' : 'gallery',
+        onend: () => { teach.lastEndAt = performance.now(); },
+      });
+    } catch { /* clip missing — the being stays unborn */ }
   }
 
   for (const n of NODES) field.addAnchor(n.id, n.anchor);
@@ -901,8 +975,10 @@ function onGrabMove({ dx, dy }) {
 
     const step = (Math.abs(dy) < 1.5 ? 0 : clamp(dy, -90, 90)) * wy;
     d.flt = (d.flt ?? 0) * 0.35 + step * 0.65;
+    const was = app.scroll.target;
     const raw = app.scroll.target - d.flt;
     app.scroll.target = clamp(raw, 0, app.scroll.max);
+    app.teachScrolled?.(app.scroll.target - was);
     // rubber band: pulling past an edge visibly carries the content with
     // resistance — the page is in your hand even when there's no more of it
     const beyond = raw < 0 ? raw : raw > app.scroll.max ? raw - app.scroll.max : 0;
@@ -1120,7 +1196,9 @@ function onSwipe({ axis, dir, vx, pure }) {
     // palm coming home or an unclear wish, and neither may move the page.
     // Back = the finger snap or the pinch; home = a couple of pinch-flings.
     if (dir === 'up') {
+      const was = app.scroll.target;
       app.scroll.target = clamp(app.scroll.target + window.innerHeight * 0.6, 0, app.scroll.max);
+      app.teachScrolled?.(app.scroll.target - was);
     }
     return;
   }
@@ -1147,8 +1225,10 @@ function onFlick({ axis, dir, vel }) {
     if (!app.lb && app.spaceId) {
       const step = window.innerHeight * 0.52;
       if (app.scroll.target <= 4) app.scroll.over = 70;   // nothing above
+      const was = app.scroll.target;
       app.scroll.target = clamp(app.scroll.target - step, 0, app.scroll.max);
       app.scroll.vel = 0;
+      app.teachScrolled?.(app.scroll.target - was);
     }
     return;
   }
@@ -1234,6 +1314,8 @@ function openLightbox(fig) {
   };
   renderLightbox();
   document.body.classList.add('lb-open');
+  // a photo opened, by any means — the photo lesson is learned
+  app.teachLearned?.('photo');
   if (app.gestures) {
     app.gestures.spreadEnabled = true;
     app.gestures.flickXEnabled = true;  // sideways flicks walk the photos
