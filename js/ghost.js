@@ -213,7 +213,14 @@ export const ghost = {
         const va = sample(fa, cx, cy);
         const vD = va + (sample(fb, cx, cy) - va) * k;
         if (vD < cut) continue;
-        const fade = 0.78 * Math.max(0, 1 - Math.hypot(x - vox, y - voy) / vR);
+        // the crop must not exist visually: the silhouette dissolves
+        // through a soft threshold, and any flesh reaching the
+        // recording's border dies out before the straight line can
+        // show — no cut edges on the gesture, ever
+        const soft = ss(cut, cut + 0.07, vD)
+          * ss(0, 12, Math.min(x - bx0, bx1 - x, y - by0, by1 - y));
+        const fade = 0.78 * soft
+          * Math.max(0, 1 - Math.hypot(x - vox, y - voy) / vR);
         if (fade < 0.02) continue;
         const vN = Math.min(1, (vD - cut) / span);
         const band = (1 - ss(gR * 0.25, gR, Math.hypot(x - gx, y - gy))) * 0.6;
