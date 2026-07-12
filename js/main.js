@@ -614,7 +614,6 @@ function boot() {
     if (e.code === 'KeyR' && e.altKey) toggleRec();
     if (e.code === 'KeyG' && e.altKey) toggleGRec();
     if (e.code === 'KeyT' && e.altKey) copyRec();
-    if (e.code === 'KeyS' && e.altKey) saveRec();
   });
   document.addEventListener('click', (e) => {
     if (app.lb) {
@@ -1963,7 +1962,7 @@ function toggleGRec() {
     app.grecOn = true;
   }
   const b = $('debug-grec');
-  if (b) b.textContent = app.grecOn ? 'rec+ ● пишет' : (app.grec?.length ? 'rec+ ✓ · ⌥S файл' : 'rec+ (⌥G)');
+  if (b) b.textContent = app.grecOn ? 'rec+ ● пишет' : (app.grec?.length ? 'rec+ ✓ · ⌥T' : 'rec+ (⌥G)');
 }
 
 // Uint8Array → base64, chunked (fromCharCode chokes on long arrays)
@@ -2028,31 +2027,6 @@ function copyRec() {
   copyText(logHead().concat(trace, ghost).join('\n'), 'debug-copyrec', 'copy rec (⌥T)');
 }
 
-// the fat ghost clip (skeletons + depth crops) is too heavy for any
-// clipboard-into-chat route — it goes straight to a file in Downloads,
-// and from there into assets/ghost/ untouched by human or chat
-function saveRec() {
-  const b = $('debug-saverec');
-  const say = (msg) => {
-    if (!b) return;
-    b.textContent = msg;
-    setTimeout(() => { b.textContent = 'save rec (⌥S)'; }, 1800);
-  };
-  if (!app.grec || !app.grec.length) { say('пусто ✗ (⌥G)'); return; }
-  const blob = new Blob(
-    [JSON.stringify({ hands: app.grec, depth: app.grecD || [] })],
-    { type: 'application/json' });
-  const a = document.createElement('a');
-  const stamp = new Date().toTimeString().slice(0, 8).replaceAll(':', '');
-  a.href = URL.createObjectURL(blob);
-  a.download = `ghost-${stamp}.json`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-  say('в загрузках ✓');
-}
-
 function renderDebug() {
   const el = $('debug');
   if (el.classList.contains('hidden')) return;
@@ -2079,11 +2053,7 @@ function renderDebug() {
     cr.id = 'debug-copyrec';
     cr.textContent = 'copy rec (⌥T)';
     cr.addEventListener('click', copyRec);
-    const sv = document.createElement('button');
-    sv.id = 'debug-saverec';
-    sv.textContent = 'save rec (⌥S)';
-    sv.addEventListener('click', saveRec);
-    tools.append(mode, b, rec, grec, cr, sv);
+    tools.append(mode, b, rec, grec, cr);
     el.before(tools);
     // the copy button deliberately outlives the panel — the log is most
     // wanted right after you've hidden the numbers
