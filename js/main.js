@@ -201,7 +201,6 @@ const app = {
   loadP: 0,
   presentSince: 0,
   nodePos: new Map(),       // id → {x, y} screen px
-  pointer: null,            // fingertip of the REFLECTION, screen px (main screen)
   lastDepth: null,
   glyphUntil: 0,                // the form is briefly words (the easter egg)
   glyphWasOn: false, glyphExitAt: 0, glyphExitHold: 0,
@@ -1556,7 +1555,6 @@ function loopBody(t) {
 
     if (app.state === 'present') {
       const handActive = gestures.active;
-      app.pointer = handActive ? reflectionPointer() : null;
       // the scene does not turn. period — stability beat liveliness
       const headX = clamp((signals.cx - 0.5) * 2 * CONFIG.focus.gain, -1.6, 1.6);
       // the words are independent of the 3D form — the ONE thing the camera
@@ -1587,35 +1585,11 @@ function loopBody(t) {
   if (t - lastTele > 500) { lastTele = t; renderTelemetry(); renderDebug(); }
 }
 
-// The pointer IS the visitor's reflection: the tracked fingertip mapped
-// onto the mirror plane and projected with the same matrix as the labels —
-// so what you see touching a label is literally your own hand of dots.
-function reflectionPointer() {
-  const g = app.gestures;
-  const h = g.hand;
-  if (!h) return null;
-  const tip = g.grabbing ? h.pinchPoint : {
-    x: h.index.x * 0.55 + h.palm.x * 0.45,
-    y: h.index.y * 0.55 + h.palm.y * 0.45,
-  };
-  let z = 1.2;
-  const ld = app.lastDepth;
-  if (ld) {
-    const ix = clamp(Math.round(tip.x * ld.width), 1, ld.width - 2);
-    const iy = clamp(Math.round(tip.y * ld.height), 1, ld.height - 2);
-    let m = 0;
-    for (let dy = -1; dy <= 1; dy++)
-      for (let dx = -1; dx <= 1; dx++)
-        m = Math.max(m, ld.data[(iy + dy) * ld.width + (ix + dx)]);
-    z = (m / 255) * CONFIG.depthAmp;
-  }
-  const local = app.field.frameToLocal(tip.x, tip.y, z);
-  const p = app.field.projectPoint(local.x, local.y, local.z);
-  return p.behind ? null : { x: p.x, y: p.y, local };
-}
-
 function updateNodes(focusX, handActive, focusable = true) {
-  const pt = handActive && app.pointer ? app.pointer : null;
+  // node focus listens to the same cursor the dot draws — one pointer, one
+  // truth on every screen (the reflection-projected fingertip diverged from
+  // the dot at non-fullscreen aspects)
+  const pt = handActive ? app.gestures.cursor : null;
   const cursorPx = pt ? pt.x
     : window.innerWidth * (0.5 + 0.5 * clamp(focusX, -1, 1) * 0.8);
   const cursorPy = pt ? pt.y
@@ -1688,7 +1662,7 @@ function updateHold(dt, now) {
   // in a chapter: dwell on the pdf link → the résumé downloads itself
   const target =
     app.state !== 'present' ? null
-    : !app.spaceId && app.focusedId && app.pointer ? 'node:' + app.focusedId
+    : !app.spaceId && app.focusedId && g.active ? 'node:' + app.focusedId
     : app.spaceId && app.hoverDl ? 'dl'
     : app.spaceId && app.hoverClose ? 'close' : null;
 
