@@ -13,6 +13,10 @@ Code, architecture and interaction iterations — **Claude Code (Fable 5,
 Anthropic)** in pair work with the author: the entire gesture vocabulary
 was derived from real interaction logs, not invented up front.
 
+How the pair actually worked — the operating agreement with the incidents
+that forged it: [WORKING-WITH-AI.md](WORKING-WITH-AI.md)
+([русская версия](WORKING-WITH-AI.ru.md)).
+
 ## How it works
 
 - [Depth Anything V2 Small](https://huggingface.co/onnx-community/depth-anything-v2-small)
@@ -32,12 +36,18 @@ was derived from real interaction logs, not invented up front.
 - Presence, proximity and head position are heuristics straight from the
   depth map (foreground fraction, blob compactness, centroid, motion) — no
   third model.
+- Every dependency is vendored: the models, the inference wasm, Three.js and
+  the fonts are served from this repository's own origin (`assets/vendor`) —
+  the site does not depend on CDN or model-hub reachability. The external
+  sources remain wired in as a silent fallback.
 
 ## The gesture vocabulary
 
 Built only on what a single RGB camera measures reliably (field logs killed
-the towards/away axis by hand size — it jitters ±35%). The pointer on the
-main screen is the reflection itself; grabbing is the act of closing fingers.
+the towards/away axis by hand size — it jitters ±35%). The pointer is the
+ring cursor stitched to the hand — one pointer, the same on every screen
+(field tests buried the poetic alternative: nobody reads their own
+reflection as a pointer); grabbing is the act of closing fingers.
 
 | gesture ↓ · screen → | the fork | a case chapter | photo fullscreen |
 | --- | --- | --- | --- |
@@ -104,7 +114,8 @@ python3 -m http.server 8000
 # → http://localhost:8000
 ```
 
-The first run downloads the models (~45 MB total); after that — browser cache.
+The models ship with the repository (`assets/vendor`) — nothing is fetched
+from external hosts; after the first run the browser caches them.
 
 ## Deploying to GitHub Pages
 
@@ -156,7 +167,10 @@ dissolves (repeating as a quiet ambient until hands appear). And since a
 cold visitor never sits still — he grabs the mouse — the mirror answers
 that too: resting the cursor on a node while the hands stay down makes the
 reflection reach for that same node. Not a tooltip; the mirror showing it
-can do what you are doing. Hints live
+can do what you are doing. For the two hardest gestures the site keeps
+recordings of the owner's own hand: when a visitor visibly stalls, the
+ghost hand replays the real movement over a mock page — and dies forever
+after the visitor's first success. Hints live
 inside the objects: until a chapter has ever been opened by hand, the
 focused node's sub-label says “hold your hand — it opens”, and disappears
 forever after the first success. No overlays, no tooltips.
@@ -169,7 +183,7 @@ WASM inference, the mobile dead-end — with zero console errors.
 
 ```
 index.html          markup of all states
-css/main.css        all styling (Fixel Display + IBM Plex Mono)
+css/                all styling (Fixel Display + self-hosted IBM Plex Mono)
 js/config.js        every tunable and perception threshold
 js/content.js       RU/EN content, node anchors, chapter rendering
 js/main.js          the state machine, signals, gestures → meaning, DOM choreography
@@ -177,7 +191,11 @@ js/scene.js         the particle field (Three.js, one shader, form poses)
 js/depth.js         camera + frame pumping into the depth worker
 js/depth-worker.js  Depth Anything V2 + presence statistics
 js/hands.js         MediaPipe Hand Landmarker → compact hand geometry
+js/pose.js          MediaPipe Pose Landmarker → presence and the head
 js/gestures.js      cursor, grab/tap/flick/fling from the geometry
+js/ghost.js         the ghost hand: recorded gesture lessons on their own stage
+assets/ghost/       recorded hint clips (depth + skeleton frames)
+assets/vendor/      self-hosted models, wasm, three.js, fonts
 assets/fonts/       Fixel Display (otf)
 assets/gallery/     case and board-game photography
 assets/             favicon, og image, résumé (pdf)
