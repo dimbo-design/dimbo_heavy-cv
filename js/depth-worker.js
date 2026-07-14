@@ -5,10 +5,13 @@
 
 import { pipeline, RawImage, env } from '../assets/vendor/transformers/transformers.min.js';
 
-// Step 1 — hard-local: library, ONNX model and ORT wasm all from this site's
-// own origin, no remote at all. BASE handles the GitHub Pages sub-path.
+// Local-primary with fallback: the vendored ONNX model is tried first, and if
+// a local file is missing Transformers falls back to the HF hub automatically
+// (that is what allowLocalModels + allowRemoteModels together do). The library
+// import and the ORT wasm stay local-only: same origin as the site, so if they
+// 404 the whole deploy is down anyway — a CDN fallback there is meaningless.
 env.allowLocalModels = true;
-env.allowRemoteModels = false;
+env.allowRemoteModels = true;
 env.localModelPath = new URL('../assets/vendor/models/', self.location).href;
 env.backends.onnx.wasm.wasmPaths = new URL('../assets/vendor/ort/', self.location).href;
 

@@ -4,9 +4,19 @@
 // If this engine fails, main falls back to the old depth heuristics.
 // Emits: 'ready', 'pose' {vis, head, shoulders}, 'fatal'
 
-// Step 1 — hard-local: bundle, wasm fileset and the .task model from our origin.
-const CDN = new URL('../assets/vendor/mediapipe', import.meta.url).href;
-const MODEL = new URL('../assets/vendor/mediapipe-models/pose_landmarker_lite.task', import.meta.url).href;
+// Local-primary with CDN fallback for the whole chain (bundle + wasm + model).
+// MediaPipe has no built-in remote fallback, so we try our own origin first and
+// fall back to the CDN / Google storage if a local file is missing.
+const LOCAL = {
+  bundle: new URL('../assets/vendor/mediapipe/vision_bundle.mjs', import.meta.url).href,
+  wasm: new URL('../assets/vendor/mediapipe/wasm', import.meta.url).href,
+  model: new URL('../assets/vendor/mediapipe-models/pose_landmarker_lite.task', import.meta.url).href,
+};
+const REMOTE = {
+  bundle: 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs',
+  wasm: 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm',
+  model: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
+};
 
 export class PoseEngine extends EventTarget {
   constructor() {
@@ -27,20 +37,23 @@ export class PoseEngine extends EventTarget {
     this._canvas = document.createElement('canvas');
     this._canvas.width = 256; this._canvas.height = 192;
     this._ctx = this._canvas.getContext('2d', { willReadFrequently: false });
-    try {
-      const { FilesetResolver, PoseLandmarker } =
-        await import(`${CDN}/vision_bundle.mjs`);
-      const files = await FilesetResolver.forVisionTasks(`${CDN}/wasm`);
+    const build = async (src) => {
+      const { FilesetResolver, PoseLandmarker } = await import(src.bundle);
+      const files = await FilesetResolver.forVisionTasks(src.wasm);
       const make = (delegate) => PoseLandmarker.createFromOptions(files, {
-        baseOptions: { modelAssetPath: MODEL, delegate },
+        baseOptions: { modelAssetPath: src.model, delegate },
         runningMode: 'VIDEO',
         numPoses: 1,
         minPoseDetectionConfidence: 0.4,
         minPosePresenceConfidence: 0.4,
         minTrackingConfidence: 0.4,
       });
-      try { this.lm = await make('GPU'); }
-      catch (_) { this.lm = await make('CPU'); }
+      try { return await make('GPU'); }
+      catch (_) { return await make('CPU'); }
+    };
+    try {
+      try { this.lm = await build(LOCAL); }
+      catch (_) { this.lm = await build(REMOTE); }
       this.ready = true;
       this._emit('ready', {});
       this._schedule(0);

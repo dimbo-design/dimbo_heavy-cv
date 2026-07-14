@@ -27,7 +27,9 @@
 
   <link rel="preload" href="assets/fonts/FixelDisplay-Regular.otf" as="font" type="font/otf" crossorigin>
   <link rel="preload" href="assets/fonts/FixelDisplay-SemiBold.otf" as="font" type="font/otf" crossorigin>
-  <!-- IBM Plex Mono self-hosted (step 1: local only), woff2 in assets/vendor/fonts -->
+  <!-- IBM Plex Mono self-hosted, woff2 in assets/vendor/fonts. Local-only by
+       design: a missing font degrades to a system mono, no CDN fallback needed.
+       Reserve: https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap&subset=cyrillic -->
   <link rel="stylesheet" href="css/ibmplexmono.css">
 
   <link rel="stylesheet" href="css/main.css">
@@ -162,6 +164,9 @@
 
   <video id="cam" playsinline muted></video>
 
+  <!-- three self-hosted. Local-only by design: importmap has no fallback, and
+       three is same-origin as the site, so if it 404s the deploy is down anyway.
+       Reserve: https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js -->
   <script type="importmap">
   {
     "imports": {
