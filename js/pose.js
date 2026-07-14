@@ -4,8 +4,9 @@
 // If this engine fails, main falls back to the old depth heuristics.
 // Emits: 'ready', 'pose' {vis, head, shoulders}, 'fatal'
 
-const CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
-const MODEL = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
+// Step 1 — hard-local: bundle, wasm fileset and the .task model from our origin.
+const CDN = new URL('../assets/vendor/mediapipe', import.meta.url).href;
+const MODEL = new URL('../assets/vendor/mediapipe-models/pose_landmarker_lite.task', import.meta.url).href;
 
 export class PoseEngine extends EventTarget {
   constructor() {

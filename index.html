@@ -27,9 +27,8 @@
 
   <link rel="preload" href="assets/fonts/FixelDisplay-Regular.otf" as="font" type="font/otf" crossorigin>
   <link rel="preload" href="assets/fonts/FixelDisplay-SemiBold.otf" as="font" type="font/otf" crossorigin>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap&subset=cyrillic" rel="stylesheet">
+  <!-- IBM Plex Mono self-hosted (step 1: local only), woff2 in assets/vendor/fonts -->
+  <link rel="stylesheet" href="css/ibmplexmono.css">
 
   <link rel="stylesheet" href="css/main.css">
 </head>
@@ -166,7 +165,7 @@
   <script type="importmap">
   {
     "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"
+      "three": "./assets/vendor/three/three.module.js"
     }
   }
   </script>

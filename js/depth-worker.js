@@ -3,9 +3,14 @@
 // WASM otherwise. Receives ImageBitmaps, returns a normalized uint8 depth map
 // plus presence statistics computed here so the main thread stays light.
 
-import { pipeline, RawImage, env } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3/dist/transformers.min.js';
+import { pipeline, RawImage, env } from '../assets/vendor/transformers/transformers.min.js';
 
-env.allowLocalModels = false;
+// Step 1 — hard-local: library, ONNX model and ORT wasm all from this site's
+// own origin, no remote at all. BASE handles the GitHub Pages sub-path.
+env.allowLocalModels = true;
+env.allowRemoteModels = false;
+env.localModelPath = new URL('../assets/vendor/models/', self.location).href;
+env.backends.onnx.wasm.wasmPaths = new URL('../assets/vendor/ort/', self.location).href;
 
 const MODEL = 'onnx-community/depth-anything-v2-small';
 

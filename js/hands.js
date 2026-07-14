@@ -3,8 +3,9 @@
 // is the canonical MediaPipe path (~5 ms/frame on GPU) and fails loudly.
 // Emits: 'ready', 'hands' {hands, t}, 'fatal'
 
-const CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
-const MODEL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
+// Step 1 — hard-local: bundle, wasm fileset and the .task model from our origin.
+const CDN = new URL('../assets/vendor/mediapipe', import.meta.url).href;
+const MODEL = new URL('../assets/vendor/mediapipe-models/hand_landmarker.task', import.meta.url).href;
 
 export class HandsEngine extends EventTarget {
   constructor() {
